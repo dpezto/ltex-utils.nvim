@@ -28,6 +28,7 @@ There are already several excellent Neovim plugins that provide similar function
 - one of the following pickers (auto-detected in order):
   - [snacks.nvim](https://github.com/folke/snacks.nvim) *(recommended)*
   - [Telescope](https://github.com/nvim-telescope/telescope.nvim)
+  - [mini.pick](https://github.com/nvim-mini/mini.nvim) (part of mini.nvim)
 
 ## Installation
 Install the plugin with your favourite plugin manager.
@@ -42,6 +43,7 @@ Install the plugin with your favourite plugin manager.
         -- picker: use one of the following
         "folke/snacks.nvim",
         -- "nvim-telescope/telescope.nvim",
+        -- "nvim-mini/mini.nvim",
     },
     opts = {
         -- your configuration comes here
