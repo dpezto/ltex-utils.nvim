@@ -25,9 +25,9 @@ There are already several excellent Neovim plugins that provide similar function
 
 - [ltex-ls-plus](https://github.com/ltex-plus/ltex-ls-plus)
 - [nvim-lspconfig](https://github.com/neovim/nvim-lspconfig)
-- [Telescope](https://github.com/nvim-telescope/telescope.nvim)
-- optional:
-  - [telescope-fzf-native.nvim](https://github.com/nvim-telescope/telescope-fzf-native.nvim)
+- one of the following pickers (auto-detected in order):
+  - [snacks.nvim](https://github.com/folke/snacks.nvim) *(recommended)*
+  - [Telescope](https://github.com/nvim-telescope/telescope.nvim)
 
 ## Installation
 Install the plugin with your favourite plugin manager.
@@ -39,8 +39,9 @@ Install the plugin with your favourite plugin manager.
     "jhofscheier/ltex-utils.nvim",
     dependencies = {
         "neovim/nvim-lspconfig",
-        "nvim-telescope/telescope.nvim",
-        -- "nvim-telescope/telescope-fzf-native.nvim", -- optional
+        -- picker: use one of the following
+        "folke/snacks.nvim",
+        -- "nvim-telescope/telescope.nvim",
     },
     opts = {
         -- your configuration comes here
@@ -80,8 +81,9 @@ For example, for `lazy.nvim` this could be done as follows.
     "jhofscheier/ltex-utils.nvim",
     dependencies = {
         "neovim/nvim-lspconfig",
-        "nvim-telescope/telescope.nvim",
-        -- "nvim-telescope/telescope-fzf-native.nvim", -- optional
+        -- picker: use one of the following
+        "folke/snacks.nvim",
+        -- "nvim-telescope/telescope.nvim",
     },
     opts = {
         dictionary = {
@@ -110,8 +112,8 @@ For example, for `lazy.nvim` this could be done as follows.
             previewer_line_number = true,
             -- wrap lines in preview window
             previewer_wrap = true,
-            -- options for creating new telescope windows
-            telescope = { bufnr = 0 },
+            -- extra options passed through to the picker (backend-specific)
+            picker = {},
         },
         diagnostics = {
             -- time to wait for language tool to complete parsing document
@@ -124,6 +126,9 @@ For example, for `lazy.nvim` this could be done as follows.
         },
         -- set the ltex-ls ("ltex") or ltex-ls-plus backend ("ltex_plus")
         backend = "ltex_plus",
+        -- picker backend: "auto" tries snacks.nvim then telescope.nvim
+        -- set to "snacks" or "telescope" to skip auto-detection
+        picker_backend = "auto",
     },
 },
 ```
