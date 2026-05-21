@@ -119,7 +119,7 @@ end
 
 ---Initialises the cache by loading server dictionaries and saved dictionaries
 ---from disk.
----@param telescope_cb function() Callback function to open Telescope window
+---@param picker_cb function() Callback function to open picker window
 ---@param _ any This parameter is used for the other caches, but ignored here
 ---@return boolean # Success?
 ---@return string|nil # Error string

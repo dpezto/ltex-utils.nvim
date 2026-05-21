@@ -1,11 +1,11 @@
 local cache = require("ltex-utils.cache")
 
 ---@class LTeXUtils.hfp_cache: LTeXUtils.cache
----@field initialise_rules function(telescope_cb: function(), use_diags: boolean): boolean, string|nil
+---@field initialise_rules function(picker_cb: function(), use_diags: boolean): boolean, string|nil
 local M = cache:new()
 
 ---Transforms selection into language and rule pair.
----@param selection table telescope selection object
+---@param selection table picker item with `text` field
 ---@return string # Language descriptor
 ---@return string # Rule
 function M.selection_to_lang_rule(selection)

@@ -5,10 +5,13 @@ local M = {}
 ---@field rule_ui? RuleUi.Config
 ---@field diagnostics? Diagnostics.Config
 ---@field backend? string
+---@field picker_backend? string "auto"|"snacks"|"telescope" (default "auto")
 local defaults = {
 	---@class Dictionary.Config
-	---@field path string
-	---@field filename function(string): string
+	---@field path? string
+	---@field filename? function(string): string
+  ---@field use_vim_dict? boolean
+  ---@field vim_cmd_output? boolean
 	dictionary = {
 		-- Path to the directory where dictionaries are stored.
 		-- Defaults to the Neovim state directory.
@@ -31,7 +34,7 @@ local defaults = {
 	---@field goto_key string
 	---@field previewer_line_number boolean
 	---@field previewer_wrap  boolean
-	---@field telescope table
+	---@field picker table
 	rule_ui = {
 		-- key to modify rule
 		modify_rule_key = "<CR>",
@@ -45,8 +48,8 @@ local defaults = {
 		previewer_line_number = true,
 		-- wrap lines in preview window
 		previewer_wrap = true,
-		-- options for creating new telescope windows
-		telescope = { bufnr = 0 },
+		-- extra options passed to Snacks.picker.pick()
+		picker = {},
 	},
 	---@class Diagnostics.Config
 	---@field debounce_time_ms? integer
@@ -63,6 +66,9 @@ local defaults = {
 	},
 	-- set the ltex-ls ("ltex") or ltex-ls-plus backend ("ltex_plus")
 	backend = "ltex_plus",
+	-- picker backend: "auto" tries snacks.nvim then telescope.nvim
+	-- set explicitly to "snacks" or "telescope" to skip auto-detection
+	picker_backend = "auto",
 }
 
 ---@type LTeXUtils.Config

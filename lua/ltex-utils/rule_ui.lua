@@ -1,23 +1,11 @@
-local Config = require("ltex-utils.config")
-local cache = require("ltex-utils.cache")
+local Config      = require("ltex-utils.config")
+local cache       = require("ltex-utils.cache")
 local diagnostics = require("ltex-utils.diagnostics")
-local hfp_cache = require("ltex-utils.hfp_cache")
+local hfp_cache   = require("ltex-utils.hfp_cache")
 local words_cache = require("ltex-utils.words_cache")
--- Telescope
-local pickers = require("telescope.pickers")
-local finders = require("telescope.finders")
-local make_entry = require("telescope.make_entry")
-local telescope_actions = require('telescope.actions')
-local action_state = require("telescope.actions.state")
-local conf = require("telescope.config").values
--- Plenary
-local popup = require("plenary.popup")
+local popup       = require("plenary.popup")
 local table_utils = require("ltex-utils.table_utils")
-
----@class Telescope.picker
----@field set_selection function(integer)
----@field delete_selection function(function(integer))
-
+local pickers     = require("ltex-utils.pickers")
 
 ---@class LTeXUtils.UI
 ---@field cache LTeXUtils.cache|LTeXUtils.hfp_cache|LTeXUtils.words_cache
@@ -27,272 +15,156 @@ rule_ui.__index = rule_ui
 ---Constructor
 ---@return LTeXUtils.UI
 function rule_ui.new()
-	---@type LTeXUtils.UI
-	local self = setmetatable(
-		{
-			---@type LTeXUtils.cache|LTeXUtils.hfp_cache|LTeXUtils.words_cache
-			cache = nil,
-		},
-		rule_ui
-	)
-	return self
+	return setmetatable({ cache = nil }, rule_ui)
 end
 
----Modifies a rule and updates the internal list.
----@param self LTeXUtils.UI
----@param use_diags boolean
----@param lang string The language identifier (e.g., 'en-GB').
----@param index integer
-local function process_input(self, use_diags, lang, index)
-	-- get bufnr of current active buffer
-	---@type integer
-	local bufnr = vim.api.nvim_get_current_buf()
-	---@type string
-	local new_rule = vim.api.nvim_buf_get_lines(bufnr, 0, 1, false)[1]
+-- ---------------------------------------------------------------------------
+-- Shared helpers
+-- ---------------------------------------------------------------------------
 
-	self.cache:update_entry(
-		index,
-		self.cache.lang_rule_to_str(lang, new_rule)
-	)
-	self.cache:reset_indices()
-
-	-- don't apply cache now
-	self.cache.update_flag = false
-
-	-- close popup window; buffer will be automatically wiped
-	---@type integer
-	local win_id = vim.api.nvim_get_current_win()
-	vim.api.nvim_win_close(win_id, true)
-
-	-- open Telescope window again
-	self:new_pick_rule_win(
-		self.cache.setting_cfg,
-		use_diags,
-		Config.rule_ui.telescope_opts
-	)
-
-	-- set flag to apply cache at the next possibility
-	self.cache.update_flag = true
-end
-
----Creates popup window with the selected ruled from the Telescope window
----and sets a callback for modification.
----@param self LTeXUtils.UI
----@param prompt_bufnr integer
----@param use_diags boolean
-local function new_modify_rule_win(self, prompt_bufnr, use_diags)
-	---@type table
-	local selection = action_state.get_selected_entry()
-
-	-- if selection `nil` do nothing
-	if not selection then
-		return
+---Builds unified picker items from cache data.
+---Both snacks and telescope backends consume this format.
+---@param data table
+---@return table
+function rule_ui.build_items(data)
+	local n     = table_utils.max_index(data)
+	local items = {}
+	for i = 1, n do
+		local entry = data[i]
+		if entry ~= nil then
+			items[#items + 1] = {
+				text   = entry.text or "",
+				file   = entry.filename,
+				pos    = entry.lnum and { entry.lnum, entry.col or 0 } or nil,
+				_type  = entry.type,
+				_bufnr = entry.bufnr,
+				index  = i,
+			}
+		end
 	end
+	return items
+end
 
-	---remember update flag
-	---@type boolean
-	local update_flag = self.cache.update_flag
+-- ---------------------------------------------------------------------------
+-- Shared actions called by picker backends
+-- ---------------------------------------------------------------------------
 
-	-- don't apply cache now as we need to close Telescope window
-	-- and therefore we might jump into the source buffer for a moment
-	self.cache.update_flag = false
-	telescope_actions.close(prompt_bufnr)
-
+---Opens the rule-edit popup window.
+---Backends must close the picker and set `update_flag = false` BEFORE calling
+---this; pass the saved flag value as `restore_flag`.
+---@param item  table   picker item (snacks) or telescope selection
+---@param use_diags  boolean
+---@param restore_flag boolean  value to restore update_flag to after setup
+function rule_ui:open_modify_popup(item, use_diags, restore_flag)
 	---@type integer
 	local win_id = popup.create('', {
-		border = true,
-		line = math.floor(vim.o.lines / 2) - 2,
-		col = math.floor(vim.o.columns / 2) - 40,
-		width= 80,
+		border    = true,
+		line      = math.floor(vim.o.lines   / 2) - 2,
+		col       = math.floor(vim.o.columns / 2) - 40,
+		width     = 80,
 		minheight = 6,
 		maxheight = 20,
-		enter = true,
+		enter     = true,
 	})
 
 	---@type integer
 	local bufnr = vim.api.nvim_win_get_buf(win_id)
-
 	vim.api.nvim_set_option_value("bufhidden", "wipe", { buf = bufnr })
-	-- Enable line wrapping
-	vim.api.nvim_set_option_value("wrap", true, { win = win_id })
+	vim.api.nvim_set_option_value("wrap",      true,   { win = win_id })
 
 	---@type string, string
-	local lang, rule = self.cache.selection_to_lang_rule(selection)
-
-	-- Populate the buffer with the text of the rule
+	local lang, rule = self.cache.selection_to_lang_rule(item)
 	vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, { rule })
 
-	vim.keymap.set({'i', 'n'}, '<CR>', function()
-			process_input(self, use_diags, lang, selection.index)
-		end,
-		{ buffer = bufnr, noremap = false, silent = true }
-	)
+	vim.keymap.set({ 'i', 'n' }, '<CR>', function()
+		local new_rule = vim.api.nvim_buf_get_lines(bufnr, 0, 1, false)[1]
+		self.cache:update_entry(item.index, self.cache.lang_rule_to_str(lang, new_rule))
+		self.cache:reset_indices()
+		self.cache.update_flag = false
+		vim.api.nvim_win_close(vim.api.nvim_get_current_win(), true)
+		self:new_pick_rule_win(self.cache.setting_cfg, use_diags, Config.rule_ui.picker)
+		self.cache.update_flag = true
+	end, { buffer = bufnr, noremap = false, silent = true })
 
-	-- set `self.cache.update_flag` flag to previous value
-	self.cache.update_flag = update_flag
+	self.cache.update_flag = restore_flag
 end
 
----Removes depricated entries from current list
----@param self LTeXUtils.UI
----@param prompt_bufnr integer
-local function cleanup_rules(self, prompt_bufnr)
-	---@type Telescope.picker
-	local picker = require("telescope.actions.state")
-					.get_current_picker(prompt_bufnr)
-	---@type table<string|integer, string|integer>
+---Deletes an item from the cache.
+---@param item table  picker item or telescope selection with `index` field
+function rule_ui:delete_item(item)
+	self.cache:delete_cb(item)
+end
+
+---Removes deprecated (ERROR-severity) items from the given list and cache.
+---@param items table  list of picker items
+---@return table       filtered list (non-deprecated items only)
+function rule_ui:cleanup_items(items)
 	local severities = vim.diagnostic.severity
-
-	---@type integer
-	local n = table_utils.max_index(self.cache.data)
-	---@type integer
-	local row = 0
-	-- We can't use `pairs` here because order isn't guaranteed
-	for i = 1, n do
-		---@type Telescope.entry
-		local entry = self.cache.data[i]
-		if entry ~= nil then
-			if entry.type == severities[2] then
-				-- set selection to first line
-				picker:set_selection(0)
-				break
-			elseif entry.type == severities[1] then
-				picker:set_selection(row)
-				picker:delete_selection(function(selection)
-					self.cache:delete_cb(selection)
-				end)
-			end
-			row = row + 1
+	local new_items  = {}
+	for _, item in ipairs(items) do
+		if item._type == severities[1] then
+			self.cache:delete_cb(item)
+		else
+			new_items[#new_items + 1] = item
 		end
+	end
+	return new_items
+end
+
+---Jumps to the file location of the given item.
+---Accepts both snacks items (`pos`) and telescope selections (`lnum`/`col`).
+---@param item table
+function rule_ui:goto_item(item)
+	local bufnr = vim.api.nvim_get_current_buf()
+	vim.diagnostic.show(diagnostics.get_ltex_namespace(bufnr), bufnr)
+	local lnum = item.pos and item.pos[1] or item.lnum
+	local col  = item.pos and item.pos[2] or item.col or 0
+	if lnum and lnum > 0 then
+		vim.api.nvim_win_set_cursor(vim.api.nvim_get_current_win(), { lnum, col })
 	end
 end
 
----Simple entry maker for telescope window
----@return function
-local function make_simple_entries()
-	return function(entry)
-		---@type integer
-		local bufnr = entry.bufnr or vim.fn.bufnr()
-
-		return {
-			valid = true,
-			value = entry,
-			ordinal = entry.text or "",
-			display = entry.text or "",
-			bufnr = bufnr,
-			lnum = entry.lnum or 0,
-			col = entry.col or 0,
-			type = entry.type or 1,
-			filename = entry.filename or vim.api.nvim_buf_get_name(bufnr),
-		}
-	end
+---Shows LTeX diagnostics in the current buffer.
+function rule_ui:show_diags()
+	local bufnr = vim.api.nvim_get_current_buf()
+	vim.diagnostic.show(diagnostics.get_ltex_namespace(bufnr), bufnr)
 end
 
----Open new telescope window
----@param opts table window options
----@param use_diags boolean
-function rule_ui:new_telescope_win(opts, use_diags)
-	pickers.new(opts, {
-		prompt_title = self.cache.setting_cfg,
-		default_text = "",
-		finder = finders.new_table {
-			results = self.cache.data,
-			entry_maker = not use_diags and make_simple_entries()
-				or opts.entry_maker
-				or make_entry.gen_from_diagnostics(opts),
-		},
-		previewer = use_diags and conf.qflist_previewer(opts) or nil,
-		sorter = conf.prefilter_sorter {
-			tag = "type",
-			sorter = conf.generic_sorter(opts),
-		},
-		attach_mappings = function(_, map)
-			---Wrapper for `map` to set multiple keys and modes
-			---@param modes_keys table<string, string[]>
-			---@param func function(integer)
-			local function map_modes_keys(modes_keys, func)
-				for mode, keys in pairs(modes_keys) do
-					for _, key in ipairs(keys) do
-						map(mode, key, func)
-					end
-				end
-			end
+-- ---------------------------------------------------------------------------
+-- Entry point
+-- ---------------------------------------------------------------------------
 
-			-- set modify key (both modes)
-			map_modes_keys({
-				n = { Config.rule_ui.modify_rule_key },
-				i = { Config.rule_ui.modify_rule_key },
-			}, function (prompt_bufnr)
-				new_modify_rule_win(self, prompt_bufnr, use_diags)
-			end)
-			-- set delete key (normal mode only)
-			map('n', Config.rule_ui.delete_rule_key, function(prompt_bufnr)
-				---@type table
-				local current_picker = action_state.get_current_picker(
-					prompt_bufnr
-				)
-				current_picker:delete_selection(function(selection)
-					self.cache:delete_cb(selection)
-				end)
-			end)
-
-			if use_diags then
-				map('n',
-					Config.rule_ui.cleanup_rules_key,
-					function(prompt_bufnr)
-						cleanup_rules(self, prompt_bufnr)
-				end)
-
-				map('n', Config.rule_ui.goto_key, function(prompt_bufnr)
-					---@type table
-					local selection = action_state.get_selected_entry()
-					telescope_actions.close(prompt_bufnr)
-					local bufnr = vim.api.nvim_get_current_buf()
-					local ns = diagnostics.get_ltex_namespace(bufnr)
-					vim.diagnostic.show(ns, bufnr)
-
-					---@type integer
-					local win = vim.api.nvim_get_current_win()
-
-					vim.api.nvim_win_set_cursor(win, {
-						selection.lnum,
-						selection.col
-					})
-				end)
-			end
-
-			-- Ensure diagnostics are displayed after closing window
-			map_modes_keys({
-				n = { '<Esc>', 'q' },
-			}, function(prompt_bufnr)
-				telescope_actions.close(prompt_bufnr)
-				local bufnr = vim.api.nvim_get_current_buf()
-				local ns = diagnostics.get_ltex_namespace(bufnr)
-				vim.diagnostic.show(ns, bufnr)
-			end)
-			return true
-		end
-	}):find()
-end
-
----Create a new telescope window for modifying `setting_cfg` rules
----@param setting_cfg string 'hiddenFalsePositives'|'disabledRules'
----@param use_diags boolean should diagnostics data be used?
----@param opts table options for telescope window
+---Creates a new picker window for modifying `setting_cfg` rules.
+---@param setting_cfg string  'hiddenFalsePositives'|'disabledRules'|'dictionary'
+---@param use_diags   boolean
+---@param opts        table   extra backend-specific options (from Config.rule_ui.picker)
 ---@return boolean
 function rule_ui:new_pick_rule_win(setting_cfg, use_diags, opts)
 	opts = opts or {}
+
 	---@type function()
-	local telescope_cb = function ()
-		self:new_telescope_win(opts, use_diags)
+	local picker_cb = function()
+		pickers.open(self, {
+			title     = setting_cfg,
+			items     = rule_ui.build_items(self.cache.data),
+			use_diags = use_diags,
+			keys = {
+				modify  = Config.rule_ui.modify_rule_key,
+				delete  = Config.rule_ui.delete_rule_key,
+				cleanup = Config.rule_ui.cleanup_rules_key,
+				goto    = Config.rule_ui.goto_key,
+			},
+			extra = opts,
+		})
 	end
 
-	-- do we have to collect rules first?
+	-- cache already populated — open picker directly
 	if self.cache then
-		telescope_cb()
+		picker_cb()
 		return true
 	end
 
-	-- initialise cache and collect entries
+	-- first call — initialise cache then open picker
 	---@type LTeXUtils.cache|LTeXUtils.hfp_cache|LTeXUtils.words_cache
 	local win_cache
 	if setting_cfg == "hiddenFalsePositives" then
@@ -302,11 +174,10 @@ function rule_ui:new_pick_rule_win(setting_cfg, use_diags, opts)
 	else
 		win_cache = words_cache:new(setting_cfg)
 	end
-	----@cast cache LTeXUtils.cache|LTeXUtils.hfp_cache|LTeXUtils.words_cache
 	self.cache = win_cache
 
 	---@type boolean, string|nil
-	local ok, err = win_cache:initialise_rules(telescope_cb, use_diags)
+	local ok, err = win_cache:initialise_rules(picker_cb, use_diags)
 	if not ok then
 		vim.notify(err or "Error in new_pick_rule_win", vim.log.levels.ERROR)
 		return false

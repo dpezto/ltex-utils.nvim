@@ -144,7 +144,7 @@ function M:delete(row)
 end
 
 ---Callback function for deleting entries
----@param selection table representing a telescope selection
+---@param selection table picker item with `index` field
 ---@return boolean
 ---@return string|nil
 function M:delete_cb(selection)
@@ -200,7 +200,7 @@ function M.lang_rule_to_str(lang, rule)
 end
 
 ---Transforms selection into language and rule pair.
----@param selection table telescope selection object
+---@param selection table picker item with `text` field
 ---@return string # Language descriptor
 ---@return string # Rule
 function M.selection_to_lang_rule(selection)
@@ -381,7 +381,7 @@ function M:sorted_rules_list()
 end
 
 ---Initialises the rules cache
----@param telescope_cb function()
+---@param picker_cb function()
 ---@param use_diags boolean
 ---@return boolean
 ---@return string|nil
