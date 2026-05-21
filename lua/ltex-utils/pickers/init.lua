@@ -2,17 +2,19 @@ local M = {}
 
 ---Detect which picker backend to use.
 ---Respects `Config.picker_backend`; falls back to auto-detection.
----@return string "snacks"|"telescope"
+---@return string "snacks"|"telescope"|"mini"
 local function detect()
 	local backend = require("ltex-utils.config").picker_backend
-	if backend == "snacks" then return "snacks" end
+	if backend == "snacks"    then return "snacks"    end
 	if backend == "telescope" then return "telescope" end
-	-- auto: prefer snacks, fall back to telescope
-	if pcall(require, "snacks.picker") then return "snacks" end
-	if pcall(require, "telescope") then return "telescope" end
+	if backend == "mini"      then return "mini"      end
+	-- auto: snacks → telescope → mini.pick
+	if pcall(require, "snacks.picker") then return "snacks"    end
+	if pcall(require, "telescope")     then return "telescope" end
+	if pcall(require, "mini.pick")     then return "mini"      end
 	error(
 		"ltex-utils: no supported picker found. " ..
-		"Install snacks.nvim or telescope.nvim."
+		"Install snacks.nvim, telescope.nvim, or mini.nvim."
 	)
 end
 
@@ -23,7 +25,7 @@ end
 ---  items      table             unified picker items (from rule_ui.build_items)
 ---  use_diags  boolean
 ---  keys       {modify,delete,cleanup,goto: string}
----  extra      table             backend-specific extra options
+---  extra      table             backend-specific extra options passed through
 function M.open(ui, opts)
 	require("ltex-utils.pickers." .. detect()).open(ui, opts)
 end

@@ -5,7 +5,7 @@ local M = {}
 ---@field rule_ui? RuleUi.Config
 ---@field diagnostics? Diagnostics.Config
 ---@field backend? string
----@field picker_backend? string "auto"|"snacks"|"telescope" (default "auto")
+---@field picker_backend? string "auto"|"snacks"|"telescope"|"mini" (default "auto")
 local defaults = {
 	---@class Dictionary.Config
 	---@field path? string
