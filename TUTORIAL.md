@@ -1,18 +1,22 @@
+<!-- LTeX: language=en -->
+
 # Tutorial
+
 Here we present one workflow of how to use the plugin `ltex-utils.nvim` showcasing its features.
 
 **Table of Contents**
 
 1. [Code Actions](#code-actions)
 2. [Updating custom dictionaries](#updating-custom-dictionaries)
-    1. [Keybindings in `modify_dict` Telescope window](#keybindings-in-modify_dict-telescope-window)
+   1. [Keybindings in `modify_dict` Telescope window](#keybindings-in-modify_dict-telescope-window)
 3. [Hide False Positives](#hide-false-positives)
-    1. [Caveats: enhance managing rules with diagnostics](#caveats-enhance-managing-rules-with-diagnostics)
-    2. [Keybinding in `modify_hideFalsePositives` Telescope window](#keybindings-in-modify_hidefalsepositives-telescope-window)
-3. [Disable Rules](#disable-rules)
-    1. [Disable `ltex-ls` Spell Checking](#disable-ltex-ls-spell-checking)
+   1. [Caveats: enhance managing rules with diagnostics](#caveats-enhance-managing-rules-with-diagnostics)
+   2. [Keybinding in `modify_hideFalsePositives` Telescope window](#keybindings-in-modify_hidefalsepositives-telescope-window)
+4. [Disable Rules](#disable-rules)
+   1. [Disable `ltex-ls` Spell Checking](#disable-ltex-ls-spell-checking)
 
 ## Code Actions
+
 Let us open the [`README.md`](README.md) file of this repository.
 When opening a file for the first time, we get a warning that no settings file exist yet.
 
@@ -29,6 +33,7 @@ Type `<leader>-ca` to activate code actions.
 ![First code action.](pics/first_code_action.png)
 
 ## Updating custom dictionaries
+
 Let's say we want to add 'LTeX-Utils' to our dictionary, so press **1**.
 Do the same for 'nvim' and 'LTeX' (that is, press `]d` to go to next issue and then press `<leader>-ca` to open code actions).
 
@@ -54,8 +59,9 @@ You can abort the whole process via the command `:q`.
 Finally, if you change your mind and don't want 'LTeX-utils' to be part of your custom dictionary, then you can delete it by pressing `d` in **normal mode**.
 
 ### Keybindings in `modify_dict` Telescope window
+
 | mode          | key    | description                     |
-|---------------|--------|---------------------------------|
+| ------------- | ------ | ------------------------------- |
 | normal        | `d`    | deletes selected entry          |
 | insert/normal | `<cr>` | opens popup window to edit word |
 
@@ -114,6 +120,7 @@ Notice that the order of the rules is preserved, however modified rules are mark
 Finally, you can quickly navigate to the specific line and column in the text where the issue is located (corresponding to the selected entry) by pressing `g` in **normal mode**.
 
 ### Caveats: enhance managing rules with diagnostics
+
 To manage false positives, it's suggested to use `:LTeXUtils modify_hiddenFalsePositives`.
 Additionally, leveraging diagnostic data can significantly enhance your experience when adjusting the false positives rules.
 To activate this feature set `diagnostics.diags_false_pos = true` (see the [Configuration](README.md#configuration) Section of the [README](README.md)).
@@ -127,21 +134,26 @@ A smaller value results in a quicker response time for opening the Telescope win
 On my system, `500` has proven to be a good choice, though you may need to tweak this depending on your specific needs and setup.
 
 ### Keybindings in `modify_hideFalsePositives` Telescope window
+
 | mode          | key    | description                                                                                                 |
-|---------------|--------|-------------------------------------------------------------------------------------------------------------|
+| ------------- | ------ | ----------------------------------------------------------------------------------------------------------- |
 | normal        | `d`    | deletes selected entry or entries. One can select more entries using the `<tab>` key.                       |
 | normal        | `c`    | deletes all 'inactive' rules, that is, perform a cleanup of rules list.                                     |
 | normal        | `g`    | jumps to the respective line and column where the issue can be found that corresponds to the selected entry |
 | insert/normal | `<cr>` | opens popup window to edit word                                                                             |
 
 # Disable Rules
+
 `disableRules` code actions allow us to disable more general language rules, such as `[OXFORD_SPELLING_Z_NOT_S]`.
 In order to add, delete, or modify these rules follow the instructions given in the Section [Hide False Positives](#hide-false-positives).
 Also, keybindings in the Telescope window are identical.
 
 ## Disable `ltex-ls` Spell Checking
+
 Should you prefer using vim's built-in spell checker and wish to turn off spell checking functionality provided by `ltex-ls`, you can disable the rule denoted as `MORFOLOGIK_RULE_[language identifier]` (replace `[language identifier]` with the corresponding language identifier).
 For example, for `EN_US`, the respective rule will be `MORFOLOGIK_RULE_EN_US`.
 
 You will need to activate the built-in spell checker yourself.
 This can typically be done with a command such as `set spell=en`.
+
+<!-- vim: set spelllang=en: -->
