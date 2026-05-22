@@ -13,7 +13,7 @@ local function ltex_filename(absolutePath)
     local name, ext = name_with_possible_ext:match("^([^%.]*)(%.?.*)$")
 
     -- Construct the new filename
-    local newName = name .. ext:gsub("%.", "_") .. "_ltex.json"
+    local newName = "." .. name .. ext:gsub("%.", "_") .. "_ltex.json"
 
     return path .. newName
 end
@@ -47,7 +47,7 @@ end
 ---Writes the current LTeX LSP server settings to a JSON file. It saves the
 ---current dictionaries and their languages, hidden false positives, and
 ---disabled rules. The settings are written to a JSON file, named
----'current_filename_ltex.json' located in its parent directory.
+---'.current_filename_ltex.json' located in its parent directory.
 function M.write_ltex_to_file(bufnr)
 	---@type integer
 	bufnr = bufnr or vim.api.nvim_get_current_buf()
@@ -112,7 +112,7 @@ end
 ---Loads LTeX  LSP settings from JSON file. Updates the active LTeX LSP
 ---server with read settings (hidden false positives, disabled rules, and
 ---specific language dictionaries). Settings file given by
----'buffer_filename_ltex.json'.  If settings file doesn't exist, an
+---'.buffer_filename_ltex.json'.  If settings file doesn't exist, an
 ---notification is printed.
 ---@return boolean # true if successful, false otherwise.
 ---@return string|nil # nil if successful, error message otherwise.
