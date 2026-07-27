@@ -8,9 +8,16 @@ local builtin = require("ltex-utils.builtin")
 
 vim.api.nvim_create_user_command("LTeXUtils", function(opts)
 	if #opts.fargs == 1 then
-		builtin[opts.fargs[1]]()
+		local fn = builtin[opts.fargs[1]]
+		if type(fn) ~= "function" then
+			vim.notify(
+				"LTeXUtils: unknown command: " .. opts.fargs[1],
+				vim.log.levels.ERROR
+			)
+			return
+		end
+		fn()
 	end
---  require("telescope.command").load_command(unpack(opts.fargs))
 end, {
 	nargs = "*",
 	complete = function(_, line)
@@ -33,10 +40,8 @@ end, {
 			local client = ltex_lsp.get_ltex()
 			if not client then return end
 
-			local settings, err = ltex_lsp.get_settings(client, "dictionary")
-			if not settings then
-				return false, err
-			end
+			local settings = ltex_lsp.get_settings(client, "dictionary")
+			if not settings then return end
 
 			local dicts = vim.tbl_keys(settings)
 			table.sort(dicts)
