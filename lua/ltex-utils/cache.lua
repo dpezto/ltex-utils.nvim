@@ -253,15 +253,15 @@ function M:apply_cache(bufnr)
 	local res = {}
 
 	for _, selection in pairs(self.data) do
-		if selection.type == severities[2] then
-			break
-		end
-		---@type string, string
-		local lang, rule = self.selection_to_lang_rule(selection)
-		if not res[lang] then
-			res[lang] = { rule }
-		else
-			table.insert(res[lang], rule)
+		-- skip diagnostics-only entries; they are not server rules
+		if selection.type ~= severities[2] then
+			---@type string, string
+			local lang, rule = self.selection_to_lang_rule(selection)
+			if not res[lang] then
+				res[lang] = { rule }
+			else
+				table.insert(res[lang], rule)
+			end
 		end
 	end
 	client.config.settings.ltex[self.setting_cfg] = res
