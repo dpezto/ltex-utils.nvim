@@ -5,7 +5,7 @@ local M = {}
 function M.open(ui, opts)
 	local MiniPick = require("mini.pick")
 
-	-- Local copy — mutated by delete/cleanup actions without touching opts.items
+	-- Rebound by delete/cleanup actions to the filtered list
 	local items = opts.items
 
 	-- -----------------------------------------------------------------------
@@ -89,9 +89,11 @@ function M.open(ui, opts)
 			-- <CR> triggers the modify popup (same as telescope/snacks default)
 			choose  = function(item)
 				if not item then return end
+				-- clear the flag BEFORE the picker closes: closing fires
+				-- BufEnter, which would apply the cache prematurely
+				local saved_flag = ui.cache.update_flag
+				ui.cache.update_flag = false
 				vim.schedule(function()
-					local saved_flag = ui.cache.update_flag
-					ui.cache.update_flag = false
 					ui:open_modify_popup(item, opts.use_diags, saved_flag)
 				end)
 			end,
