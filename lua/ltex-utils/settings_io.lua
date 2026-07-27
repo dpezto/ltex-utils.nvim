@@ -26,6 +26,7 @@ local function read(filename)
 	---@type table|nil, nil|string
 	local stat, err_stat = uv.fs_fstat(fd)
 	if err_stat then
+		uv.fs_close(fd)
 		return nil, err_stat
 	end
 
@@ -37,14 +38,11 @@ local function read(filename)
 	---@type string|nil, nil|string
 	local data, err_read = uv.fs_read(fd, file_size, 0)
 	if err_read then
+		uv.fs_close(fd)
 		return nil, err_read
 	end
 
-	---@type boolean, string|nil
-	local ok_close, err_close = pcall(uv.fs_close, fd)
-	if not ok_close then
-		return nil, err_close
-	end
+	uv.fs_close(fd)
 
 	return data, nil
 end
@@ -66,7 +64,7 @@ function M.read_dictionary(filename)
 	---dictionary file format.
 	---@cast data string
 	local ok_json, contents_json = pcall(vim.json.decode, data)
-	if ok_json then
+	if ok_json and type(contents_json) == "table" then
 		return contents_json, nil
 	end
 -------------------------------------------------------------------------------
@@ -137,8 +135,8 @@ function M.ensure_folder_exists(path)
 	local folder_stat, err_stat = uv.fs_stat(path)
 	-- If there's an error and the folder does not exist, create it
 	if not folder_stat and err_stat then
-		---@type boolean, string|nil
-		local ok, err = pcall(uv.fs_mkdir, path, 448) -- octal representation of the permission bits (0700)
+		---@type boolean|nil, string|nil
+		local ok, err = uv.fs_mkdir(path, 448) -- octal representation of the permission bits (0700)
 		if not ok then
 			-- Handle any error during folder creation
 			vim.notify("Error creating folder: " .. vim.inspect(err), ERROR)
