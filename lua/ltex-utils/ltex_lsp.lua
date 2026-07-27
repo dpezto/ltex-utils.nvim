@@ -35,7 +35,11 @@ end
 ---@return table<string, string[]>
 function M.get_settings_or_init(client, option)
 	---@type table
-	local settings = client.config.settings.ltex or {}
+	local settings = client.config.settings.ltex
+	if not settings then
+		settings = {}
+		client.config.settings.ltex = settings
+	end
 
 	if not settings[option] then
 		settings[option] = {}
@@ -54,7 +58,7 @@ function M.get_settings(client, setting_cfg)
 	local settings = client.config.settings.ltex
 
 	-- Check if active server has settings `setting_cfg`
-	if not settings[setting_cfg] then
+	if not settings or not settings[setting_cfg] then
 		return nil, string.format(
 			"The current LTeX server has no settings: %s\n",
 			setting_cfg

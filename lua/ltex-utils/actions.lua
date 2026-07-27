@@ -140,13 +140,14 @@ function M.load_ltex_from_file()
 
 	---@type table<string, string[]>
 	local client_settings = client.config.settings.ltex
-	client_settings.hiddenFalsePositives = saved_settings.hiddenFalsePositives or nil
-	client_settings.disabledRules = saved_settings.disabledRules or nil
+	if not client_settings then
+		client_settings = {}
+		client.config.settings.ltex = client_settings
+	end
+	client_settings.hiddenFalsePositives = saved_settings.hiddenFalsePositives
+	client_settings.disabledRules = saved_settings.disabledRules
 
 	if saved_settings.langs then
-		if not client_settings.dictionary and #saved_settings.langs > 0 then
-			client_settings.dictionary = {}
-		end
 		-- read the required dictionaries
 		client_settings.dictionary = settings_io.load_dictionaries(
 			saved_settings.langs
