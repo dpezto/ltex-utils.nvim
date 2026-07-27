@@ -134,6 +134,16 @@ function M.actions_from_diags(client, bufnr, diags, process_action, final_cb)
 		pending_reqs = pending_reqs + #chunk.diagnostics
 	end
 
+	-- no diagnostics at all: still open the picker and restore server settings
+	if pending_reqs == 0 then
+		final_cb()
+		client.notify(
+			"workspace/didChangeConfiguration",
+			client.config.settings
+		)
+		return
+	end
+
 	for _, chunk in ipairs(diags) do
 		---@type string
 		local uri = chunk.uri

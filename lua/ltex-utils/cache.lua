@@ -313,7 +313,7 @@ end
 ---@param setting_cfg string
 ---@return table|nil
 local function quickfix_from_action(actions, setting_cfg)
-	for _, action in ipairs(actions) do
+	for _, action in ipairs(actions or {}) do
 		if action.kind == setting_quickfix_map[setting_cfg] then
 			return action
 		end
