@@ -103,44 +103,30 @@ function M.read_settings(filename)
 	return contents_json, nil
 end
 
----Asynchronously writes `data` to file at `filepath`
+---Writes `data` to file at `filepath`. Synchronous so that writes triggered
+---from BufUnload still complete before Neovim exits.
 ---@param filepath string path to target file
 ---@param data string data to write
 ---@param callback function|nil function to be executed after writing
 function M.write(filepath, data, callback)
-	uv.fs_open(filepath, "w", 438,       -- 438 = 0o666
-		---@param err_open nil|string
-		---@param fd integer|nil
-		function(err_open, fd)
-			if err_open then
-				vim.notify("Error opening file: " .. err_open, ERROR)
-				return
-			end
-			uv.fs_write(fd, data, -1,
-				---@param err_write nil|string
-				---@param _ integer|nil bytes written
-				function(err_write, _)
-					if err_write then
-						vim.notify("Error writing to file: " ..
-												vim.inspect(err_write), ERROR)
-					end
-					uv.fs_close(fd,
-						---@param err_close nil|string
-						---@param _ boolean|nil
-						function(err_close, _)
-							if err_close then
-								vim.notify("Error closing file: " ..
-												vim.inspect(err_close), ERROR)
-							end
-							if callback then
-								callback()
-							end
-						end
-					)
-				end
-			)
-		end
-	)
+	---@type integer|nil, nil|string
+	local fd, err_open = uv.fs_open(filepath, "w", 438) -- 438 = 0o666
+	if not fd then
+		vim.notify("Error opening file: " .. tostring(err_open), ERROR)
+		return
+	end
+
+	---@type integer|nil, nil|string
+	local _, err_write = uv.fs_write(fd, data, -1)
+	if err_write then
+		vim.notify("Error writing to file: " .. vim.inspect(err_write), ERROR)
+	end
+
+	uv.fs_close(fd)
+
+	if callback then
+		callback()
+	end
 end
 
 ---Check if the folder exists and create it if not
