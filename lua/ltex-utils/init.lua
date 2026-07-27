@@ -61,6 +61,7 @@ local function autocmd_ltex()
 
 	vim.api.nvim_create_autocmd("User", {
 		pattern = "TelescopePreviewerLoaded",
+		group = augroup_id,
 		callback = function(args)
 			---@type string
       if args.data == nil or args.data.bufname == nil then
