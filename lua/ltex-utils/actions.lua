@@ -97,16 +97,14 @@ function M.write_ltex_to_file(bufnr)
 		langs = table_utils.merge_lists_unique(langs, { settings.language })
 	end
 
-	settings_to_save.langs = langs or nil
+	settings_to_save.langs = langs
 
-	if settings_to_save then
-		---@type string
-		local buf_filename = vim.api.nvim_buf_get_name(bufnr)
-		settings_io.write(
-			ltex_filename(buf_filename),
-			vim.json.encode(settings_to_save)
-		)
-	end
+	---@type string
+	local buf_filename = vim.api.nvim_buf_get_name(bufnr)
+	settings_io.write(
+		ltex_filename(buf_filename),
+		vim.json.encode(settings_to_save)
+	)
 end
 
 ---Loads LTeX  LSP settings from JSON file. Updates the active LTeX LSP

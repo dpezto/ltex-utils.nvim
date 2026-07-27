@@ -66,8 +66,6 @@ local cfg_cmd_map = {
 ---@field data Telescope.entry[]
 ---@field setting_cfg string
 ---@field update_flag boolean
----@field add function(Telescope.entry)
----@field delete function(integer)
 local M = {}
 M.__index = M
 
@@ -87,60 +85,6 @@ function M:new(setting_cfg)
 		},
 		self
 	)
-end
-
----Validate table to be valid telescope entry
----@param entry table
----@return boolean
----@return string|nil
-local function validate(entry)
-	if type(entry) ~= "table" then
-		return false, "Expected a table"
-	end
-
-	-- List of required keys
-	---@type string[]
-	local required_keys = {
-		"bufnr",
-		"filename",
-		"lnum",
-		"col",
-		"text",
-		"type",
-	}
-
-	-- check if all required keys are present
-	for _, key in ipairs(required_keys) do
-		if entry[key] == nil then
-			return false, "Missing key: " .. key
-		end
-	end
-
-	return true
-end
-
----Validates `entry` and adds entry to data hash table using `text` key
----@param entry Telescope.entry
-function M:add(entry)
-	if not entry then return end
-
-	---@type boolean, string|nil
-	local entry_ok, err = validate(entry)
-	if not entry_ok then
-		vim.notify(err or "Problem adding entry", vim.log.levels.ERROR)
-		return
-	end
-
-	self.data[entry.text] = entry
-end
-
----Deletes entry at row'th position (if exists)
----@param row integer
-function M:delete(row)
-	if self.data[row] then
-		self.data[row] = nil
-		self.update_flag = true
-	end
 end
 
 ---Callback function for deleting entries

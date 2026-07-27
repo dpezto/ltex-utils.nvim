@@ -48,7 +48,7 @@ local defaults = {
 		previewer_line_number = true,
 		-- wrap lines in preview window
 		previewer_wrap = true,
-		-- extra options passed to Snacks.picker.pick()
+		-- extra options passed to the picker backend
 		picker = {},
 	},
 	---@class Diagnostics.Config
@@ -66,8 +66,8 @@ local defaults = {
 	},
 	-- set the ltex-ls ("ltex") or ltex-ls-plus backend ("ltex_plus")
 	backend = "ltex_plus",
-	-- picker backend: "auto" tries snacks.nvim then telescope.nvim
-	-- set explicitly to "snacks" or "telescope" to skip auto-detection
+	-- picker backend: "auto" tries snacks.nvim, telescope.nvim, then mini.pick
+	-- set explicitly to "snacks", "telescope", or "mini" to skip auto-detection
 	picker_backend = "auto",
 }
 
