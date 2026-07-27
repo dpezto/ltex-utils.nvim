@@ -118,7 +118,8 @@ function rule_ui:goto_item(item)
 	local bufnr = vim.api.nvim_get_current_buf()
 	vim.diagnostic.show(diagnostics.get_ltex_namespace(bufnr), bufnr)
 	local lnum = item.pos and item.pos[1] or item.lnum
-	local col  = item.pos and item.pos[2] or item.col or 0
+	-- item columns are 1-based; nvim_win_set_cursor expects 0-based
+	local col  = math.max((item.pos and item.pos[2] or item.col or 1) - 1, 0)
 	if lnum and lnum > 0 then
 		vim.api.nvim_win_set_cursor(vim.api.nvim_get_current_win(), { lnum, col })
 	end
