@@ -150,9 +150,13 @@ function M.setup(opts)
 					local fileencoding = vim.api.nvim_get_option_value(
 						"fileencoding",
 						{ buf = 0 }
-					) or "utf-8"
+					)
+					if fileencoding == nil or fileencoding == "" then
+						fileencoding = "utf-8"
+					end
 
-					return string.match(lang, "^(%a+)-") .. "." ..
+					-- "en-US" -> "en"; plain "en" stays "en"
+					return (string.match(lang, "^(%a+)") or lang) .. "." ..
 						fileencoding .. ".add"
 				end,
 			}
