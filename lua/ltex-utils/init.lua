@@ -23,56 +23,53 @@ local function on_exit(bufmeta)
 	end
 end
 
----Set up autocommands in respective augroups (e.g., 'LTeXUtils')
-local function autocmd_ltex()
+vim.api.nvim_create_autocmd("User", {
+	pattern = "TelescopePreviewerLoaded",
+	group = vim.api.nvim_create_augroup("LTeXUtils", { clear = true }),
+	callback = function(args)
+		if args.data == nil or args.data.bufname == nil then
+			return
+		end
+		---@type string|nil
+		local extension = args.data.bufname:match("%.(%w+)$")
+		if extension == "md" or extension == "tex" then
+			vim.wo.number = Config.rule_ui.previewer_line_number
+			vim.wo.wrap = Config.rule_ui.previewer_wrap
+		end
+	end,
+})
+
+---Set up the buffer-local autocommands for an attached buffer.
+---Scoped to `bufnr` rather than to `*.tex`/`*.md`, so every filetype ltex
+---supports (rst, org, typst, bib, ...) gets its settings saved too.
+---@param bufnr integer
+local function autocmd_ltex(bufnr)
+	-- own group per buffer: re-attaching replaces this buffer's autocommands
+	-- without clearing those of the other attached buffers
 	---@type integer
 	local augroup_id = vim.api.nvim_create_augroup(
-		"LTeXUtils",
+		"LTeXUtils_" .. bufnr,
 		{ clear = true }
 	)
 
-	vim.api.nvim_create_autocmd(
-		{ "BufUnload" },
-		{
-			pattern = { "*.tex", "*.md" },
-			callback = on_exit,
-			group = augroup_id,
-			desc = "save ltex settings to files",
-		}
-	)
-
-	vim.api.nvim_create_autocmd(
-		{ "BufEnter"},
-		{
-			pattern = { "*.tex", "*.md" },
-			callback = function ()
-				---@type integer
-				local bufnr = vim.api.nvim_get_current_buf()
-				---@type LTeXUtils.UI|nil
-				local wins = builtin.wins[bufnr]
-				if wins ~= nil and wins.cache ~= nil then
-					wins.cache:apply_cache(bufnr)
-				end
-			end,
-			group = augroup_id,
-			desc = "apply cached rule changes",
-		}
-	)
-
-	vim.api.nvim_create_autocmd("User", {
-		pattern = "TelescopePreviewerLoaded",
+	vim.api.nvim_create_autocmd("BufUnload", {
+		buffer = bufnr,
+		callback = on_exit,
 		group = augroup_id,
-		callback = function(args)
-			---@type string
-      if args.data == nil or args.data.bufname == nil then
-        return
-      end
-			local extension = args.data.bufname:match("%.(%w+)$")
-			if extension == "md" or extension == "tex" then
-				vim.wo.number = Config.rule_ui.previewer_line_number
-				vim.wo.wrap = Config.rule_ui.previewer_wrap
+		desc = "save ltex settings to files",
+	})
+
+	vim.api.nvim_create_autocmd("BufEnter", {
+		buffer = bufnr,
+		callback = function()
+			---@type LTeXUtils.UI|nil
+			local wins = builtin.wins[bufnr]
+			if wins ~= nil and wins.cache ~= nil then
+				wins.cache:apply_cache(bufnr)
 			end
 		end,
+		group = augroup_id,
+		desc = "apply cached rule changes",
 	})
 end
 
@@ -123,7 +120,7 @@ function M.on_attach(bufnr)
 	)
 
 	-- create autocommands
-	autocmd_ltex()
+	autocmd_ltex(bufnr)
 
 	-- create ui instance for modifying rules; guarantees that
 	-- managing rules in different buffers work as expected
