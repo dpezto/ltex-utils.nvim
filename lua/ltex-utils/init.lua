@@ -131,7 +131,7 @@ function M.on_attach(bufnr)
 
 	-- load server settings if they exist
 	---@type boolean, string|nil
-	local ok, err = ltex.load_ltex_from_file()
+	local ok, err = ltex.load_ltex_from_file(bufnr)
 	if not ok and err then
 		-- if settings file does not exist yet, inform user and
 		-- continue with emtpy settings

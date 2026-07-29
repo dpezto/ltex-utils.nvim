@@ -112,10 +112,11 @@ end
 ---specific language dictionaries). Settings file given by
 ---'.buffer_filename_ltex.json'.  If settings file doesn't exist, an
 ---notification is printed.
+---@param bufnr integer|nil Buffer number; if not provided uses current buffer.
 ---@return boolean # true if successful, false otherwise.
 ---@return string|nil # nil if successful, error message otherwise.
-function M.load_ltex_from_file()
-	local bufnr = vim.api.nvim_get_current_buf()
+function M.load_ltex_from_file(bufnr)
+	bufnr = bufnr or vim.api.nvim_get_current_buf()
 	---@type table|nil
 	local client = ltex_lsp.get_ltex(bufnr)
 	-- if no active ltex client abort
