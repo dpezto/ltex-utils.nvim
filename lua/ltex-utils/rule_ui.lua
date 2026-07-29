@@ -3,7 +3,6 @@ local cache       = require("ltex-utils.cache")
 local diagnostics = require("ltex-utils.diagnostics")
 local hfp_cache   = require("ltex-utils.hfp_cache")
 local words_cache = require("ltex-utils.words_cache")
-local popup       = require("plenary.popup")
 local table_utils = require("ltex-utils.table_utils")
 local pickers     = require("ltex-utils.pickers")
 
@@ -57,18 +56,18 @@ end
 ---@param restore_flag boolean  value to restore update_flag to after setup
 function rule_ui:open_modify_popup(item, use_diags, restore_flag)
 	---@type integer
-	local win_id = popup.create('', {
-		border    = true,
-		line      = math.floor(vim.o.lines   / 2) - 2,
-		col       = math.floor(vim.o.columns / 2) - 40,
-		width     = 80,
-		minheight = 6,
-		maxheight = 20,
-		enter     = true,
+	local bufnr = vim.api.nvim_create_buf(false, true)
+	---@type integer
+	local win_id = vim.api.nvim_open_win(bufnr, true, {
+		relative = "editor",
+		width    = 80,
+		height   = 6,
+		row      = math.floor(vim.o.lines   / 2) - 2,
+		col      = math.floor(vim.o.columns / 2) - 40,
+		style    = "minimal",
+		border   = "single",
 	})
 
-	---@type integer
-	local bufnr = vim.api.nvim_win_get_buf(win_id)
 	vim.api.nvim_set_option_value("bufhidden", "wipe", { buf = bufnr })
 	vim.api.nvim_set_option_value("wrap",      true,   { win = win_id })
 
@@ -81,7 +80,7 @@ function rule_ui:open_modify_popup(item, use_diags, restore_flag)
 		self.cache:update_entry(item.index, self.cache.lang_rule_to_str(lang, new_rule))
 		self.cache:reset_indices()
 		self.cache.update_flag = false
-		vim.api.nvim_win_close(vim.api.nvim_get_current_win(), true)
+		vim.api.nvim_win_close(win_id, true)
 		self:new_pick_rule_win(self.cache.setting_cfg, use_diags, Config.rule_ui.picker)
 		self.cache.update_flag = true
 	end, { buffer = bufnr, noremap = false, silent = true })
