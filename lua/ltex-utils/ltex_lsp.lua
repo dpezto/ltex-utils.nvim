@@ -3,12 +3,6 @@ local Config = require("ltex-utils.config")
 
 local M = {}
 
----@class vim.loop.timer
----@field start function()
----@field stop function()
----@field close function()
-
-
 ---Returns the first active LTeX LSP client attached to a buffer.
 ---NOTE: vim.lsp.buf_get_clients() is deprecated;
 ---use vim.lsp.get_active_clients instead.
@@ -74,8 +68,9 @@ end
 ---@param callback function Function called after all data is collected
 ---@return function(table, vim.lsp.diagnostic.diagnostic, table) # "textDocument/publishDiagnostics"-notification handler
 function M.on_publish_diags(accumulated_diagnostics, callback)
-	---@type vim.loop.timer|nil
-	local diag_timer = nil
+	local diag_timer = vim.uv.new_timer()
+	---@type boolean
+	local done = false
 
 	return function (
 		err,
@@ -95,26 +90,20 @@ function M.on_publish_diags(accumulated_diagnostics, callback)
 		-- Add new diagnostics to our table
 		table.insert(accumulated_diagnostics, result)
 
-		-- If there's an existing timer, stop it
-		if diag_timer then
-			diag_timer:stop()
-			diag_timer:close()
-			diag_timer = nil
-		end
+		if done then return end
 
-		-- Start a new timer
-		diag_timer = vim.loop.new_timer()
-
-		-- Schedule the timer to call our function after debounce_time_ms
+		-- Restart the debounce window; the last notification wins
+		diag_timer:stop()
 		diag_timer:start(
 			Config.diagnostics.debounce_time_ms,
 			0,
 			vim.schedule_wrap(function()
-				callback()
-				-- Clear the diagnostics and the timer
-				diag_timer:stop()
+				-- another notification may have restarted the timer while
+				-- this callback was queued on the main loop
+				if done or diag_timer:is_active() then return end
+				done = true
 				diag_timer:close()
-				diag_timer = nil
+				callback()
 			end)
 		)
 	end
@@ -137,7 +126,7 @@ function M.actions_from_diags(client, bufnr, diags, process_action, final_cb)
 	-- no diagnostics at all: still open the picker and restore server settings
 	if pending_reqs == 0 then
 		final_cb()
-		client.notify(
+		client:notify(
 			"workspace/didChangeConfiguration",
 			client.config.settings
 		)
@@ -155,7 +144,7 @@ function M.actions_from_diags(client, bufnr, diags, process_action, final_cb)
 				context = { diagnostics = diag },
 			}
 
-			client.request(
+			client:request(
 				'textDocument/codeAction',
 				params,
 				function(err, actions)
@@ -172,7 +161,7 @@ function M.actions_from_diags(client, bufnr, diags, process_action, final_cb)
 					if pending_reqs == 0 then
 						final_cb()
 
-						client.notify(
+						client:notify(
 							"workspace/didChangeConfiguration",
 							client.config.settings
 						)

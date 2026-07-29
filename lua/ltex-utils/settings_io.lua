@@ -1,8 +1,6 @@
 local Config = require("ltex-utils.config")
 local table_utils = require("ltex-utils.table_utils")
-local uv = vim.loop
-
----@class vim.file
+local uv = vim.uv
 
 local M = {}
 
@@ -16,8 +14,6 @@ local ERROR = vim.log.levels.ERROR
 local function read(filename)
 	---@type integer|nil, nil|string
 	local fd, err_open = uv.fs_open(filename, "r", 438) -- 438 = 0o666
---	---@type vim.file|nil, string|nil
---	local fd, err_open = uv.fs_open(filename, "r", 420)  -- 420 = 0o644
 	if err_open then
 		return nil, err_open
 	end

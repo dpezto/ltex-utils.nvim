@@ -79,7 +79,6 @@ local severities = vim.diagnostic.severity
 function M:new(setting_cfg)
 	self.__index = self
 	return setmetatable({
-			data = nil,
 			setting_cfg = setting_cfg,
 			update_flag = false,
 		},
@@ -211,7 +210,7 @@ function M:apply_cache(bufnr)
 	client.config.settings.ltex[self.setting_cfg] = res
 
 	-- send updated settings to LSP server
-	client.notify("workspace/didChangeConfiguration", client.config.settings)
+	client:notify("workspace/didChangeConfiguration", client.config.settings)
 
 	self.data = nil
 	self.update_flag = false
@@ -393,7 +392,7 @@ function M:initialise_rules(telescope_cb, use_diags)
 
 	-- reset hiddenFalsePositives to get all possible code actions
 	client.config.settings.ltex[setting_cfg] = nil
-	client.notify("workspace/didChangeConfiguration", client.config.settings)
+	client:notify("workspace/didChangeConfiguration", client.config.settings)
 
 	return true
 end
