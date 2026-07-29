@@ -3,52 +3,26 @@ if vim.g.loaded_ltex_utils == 1 then
 end
 vim.g.loaded_ltex_utils = 1
 
-local ltex_lsp = require("ltex-utils.ltex_lsp")
 local builtin = require("ltex-utils.builtin")
 
 vim.api.nvim_create_user_command("LTeXUtils", function(opts)
-	if #opts.fargs == 1 then
-		local fn = builtin[opts.fargs[1]]
-		if type(fn) ~= "function" then
-			vim.notify(
-				"LTeXUtils: unknown command: " .. opts.fargs[1],
-				vim.log.levels.ERROR
-			)
-			return
-		end
-		fn()
+	local fn = builtin[opts.args]
+	if type(fn) ~= "function" then
+		vim.notify(
+			"LTeXUtils: unknown command: " .. opts.args,
+			vim.log.levels.ERROR
+		)
+		return
 	end
+	fn()
 end, {
-	nargs = "*",
-	complete = function(_, line)
-		local excluded = { "wins" }
-		local builtin_list = vim.tbl_filter(function(key)
-			return not vim.tbl_contains(excluded, key)
-		end, vim.tbl_keys(require("ltex-utils.builtin")))
-		local l = vim.split(line, "%s+")
-		local n = #l - 2
-
-		if n == 0 then
-			table.sort(builtin_list)
-
-			return vim.tbl_filter(function(val)
-				return vim.startswith(val, l[2])
-			end, builtin_list)
-		end
-
-		if n == 1 and l[2] == "modify_dict" then
-			local client = ltex_lsp.get_ltex()
-			if not client then return end
-
-			local settings = ltex_lsp.get_settings(client, "dictionary")
-			if not settings then return end
-
-			local dicts = vim.tbl_keys(settings)
-			table.sort(dicts)
-
-			return vim.tbl_filter(function(val)
-				return vim.startswith(val, l[3])
-			end, dicts)
-		end
+	nargs = 1,
+	complete = function(arg_lead)
+		local commands = vim.tbl_filter(function(key)
+			return type(builtin[key]) == "function"
+				and vim.startswith(key, arg_lead)
+		end, vim.tbl_keys(builtin))
+		table.sort(commands)
+		return commands
 	end,
 })

@@ -5,9 +5,7 @@ local M = {}
 ---@return string "snacks"|"telescope"|"mini"
 local function detect()
 	local backend = require("ltex-utils.config").picker_backend
-	if backend == "snacks"    then return "snacks"    end
-	if backend == "telescope" then return "telescope" end
-	if backend == "mini"      then return "mini"      end
+	if backend and backend ~= "auto" then return backend end
 	-- auto: snacks → telescope → mini.pick
 	if pcall(require, "snacks.picker") then return "snacks"    end
 	if pcall(require, "telescope")     then return "telescope" end
