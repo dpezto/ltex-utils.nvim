@@ -15,7 +15,7 @@ local defaults = {
 	dictionary = {
 		-- Path to the directory where dictionaries are stored.
 		-- Defaults to the Neovim state directory.
-		path = vim.api.nvim_call_function("stdpath", { "state" }) .. "/ltex/",
+		path = vim.fn.stdpath("state") .. "/ltex/",
 		---Returns the dictionary file name for given language `lang`
 		---@param lang string
 		---@return string
@@ -142,10 +142,18 @@ end
 ---@param opts? LTeXUtils.Config
 function M.setup(opts)
 	opts = opts or {}
-	local vim_dict_settings = opts.dictionary and opts.dictionary.use_vim_dict
+	local use_vim_dict = opts.dictionary and opts.dictionary.use_vim_dict
+	local vim_dict_dir = use_vim_dict
+		and get_vim_dict_dir(vim.fn.stdpath("config") .. "/spell/")
+	-- callers concatenate `path .. filename(lang)`, so keep the trailing
+	-- separator the runtimepath branches don't add
+	if vim_dict_dir and not vim.endswith(vim_dict_dir, "/") then
+		vim_dict_dir = vim_dict_dir .. "/"
+	end
+	local vim_dict_settings = use_vim_dict
 		and {
 			dictionary = {
-				path = get_vim_dict_dir(vim.fn.stdpath("config") .. "/spell/"),
+				path = vim_dict_dir,
 				filename = function(lang)
 					local fileencoding = vim.api.nvim_get_option_value(
 						"fileencoding",

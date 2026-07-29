@@ -43,13 +43,15 @@ function M:apply_cache(bufnr)
 		if entry then
 			---@type string, string
 			local lang, word = self.selection_to_lang_rule(entry)
+			-- an edited entry may name a language the server didn't report
+			dicts[lang] = dicts[lang] or {}
 			table.insert(dicts[lang], word)
 		end
 	end
 	client.config.settings.ltex[self.setting_cfg] = dicts
 
 	-- send updated settings to LSP server
-	client.notify("workspace/didChangeConfiguration", client.config.settings)
+	client:notify("workspace/didChangeConfiguration", client.config.settings)
 
 	for lang, dict in pairs(dicts) do
 		---@type string

@@ -21,15 +21,18 @@ function M.merge_lists_unique(list1, list2)
 	---@type table<string, boolean>
 	local unique_elements = {}
 
-	for _, list in ipairs({ list1, list2 }) do
-		if list then
-			for _, element in ipairs(list) do
-				unique_elements[element] = true
-			end
+	-- not `ipairs({ list1, list2 })`: that stops at index 1 when list1 is nil
+	for _, list in pairs({ list1, list2 }) do
+		for _, element in ipairs(list) do
+			unique_elements[element] = true
 		end
 	end
 
-	return vim.tbl_keys(unique_elements)
+	---@type string[]
+	local res = vim.tbl_keys(unique_elements)
+	-- keep dictionary files stable across writes
+	table.sort(res)
+	return res
 end
 
 ---Returns the largest index of a table with keys in the integers >= 1.

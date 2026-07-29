@@ -11,28 +11,33 @@ builtin.wins = {}
 ---@param setting_cfg string
 ---@param use_diags boolean
 local function new_win(setting_cfg, use_diags)
-	use_diags = vim.F.if_nil(use_diags, false)
 	---@type LTeXUtils.UI
 	local win = builtin.wins[vim.api.nvim_get_current_buf()]
-	if win then
-		-- delete old cache
-		win.cache = nil
-		---@type boolean, string|nil
-		local ok, err = win:new_pick_rule_win(
-			setting_cfg,
-			use_diags,
-			Config.rule_ui.picker
+	if not win then
+		vim.notify(
+			"LTeXUtils: no LTeX server attached to this buffer",
+			vim.log.levels.WARN
 		)
-		if not ok then
-			vim.notify(
-				err or "Error in modifying rules",
-				vim.log.levels.WARN
-			)
-		end
+		return
+	end
+
+	-- delete old cache
+	win.cache = nil
+	---@type boolean, string|nil
+	local ok, err = win:new_pick_rule_win(
+		setting_cfg,
+		use_diags,
+		Config.rule_ui.picker
+	)
+	if not ok then
+		vim.notify(
+			err or "Error in modifying rules",
+			vim.log.levels.WARN
+		)
 	end
 end
 
----Writes LTeX LSP server settings to filej
+---Writes LTeX LSP server settings to file
 builtin.write_settings_to_file = actions.write_ltex_to_file
 
 ---Loads LTeX LSP server settings from file
