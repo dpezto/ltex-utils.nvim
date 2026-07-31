@@ -52,9 +52,20 @@ local function autocmd_ltex(bufnr)
 		{ clear = true }
 	)
 
-	vim.api.nvim_create_autocmd("BufUnload", {
+	-- LspDetach, not BufUnload: the buffer's `on_detach` callback (which
+	-- removes the buffer from `client.attached_buffers`) runs *before*
+	-- BufUnload, so the client is already gone by then. LspDetach fires
+	-- while the client is still attached, and covers closing the buffer,
+	-- stopping the server and quitting Neovim alike.
+	vim.api.nvim_create_autocmd("LspDetach", {
 		buffer = bufnr,
-		callback = on_exit,
+		callback = function(args)
+			---@type vim.lsp.Client|nil
+			local client = vim.lsp.get_client_by_id(args.data.client_id)
+			-- ignore other language servers detaching from this buffer
+			if not client or client.name ~= Config.backend then return end
+			on_exit(args)
+		end,
 		group = augroup_id,
 		desc = "save ltex settings to files",
 	})
