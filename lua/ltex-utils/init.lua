@@ -3,6 +3,7 @@ local M = {}
 local builtin = require("ltex-utils.builtin")
 local Config = require("ltex-utils.config")
 local ltex = require("ltex-utils.actions")
+local ltex_lsp = require("ltex-utils.ltex_lsp")
 local rule_ui = require("ltex-utils.rule_ui")
 
 -- Writes current LTeX LSP server settings to file
@@ -55,8 +56,8 @@ local function autocmd_ltex(bufnr)
 	-- LspDetach, not BufUnload: the buffer's `on_detach` callback (which
 	-- removes the buffer from `client.attached_buffers`) runs *before*
 	-- BufUnload, so the client is already gone by then. LspDetach fires
-	-- while the client is still attached, and covers closing the buffer,
-	-- stopping the server and quitting Neovim alike.
+	-- while the client is still attached, and covers closing the buffer
+	-- and stopping the server.
 	vim.api.nvim_create_autocmd("LspDetach", {
 		buffer = bufnr,
 		callback = function(args)
@@ -68,6 +69,22 @@ local function autocmd_ltex(bufnr)
 		end,
 		group = augroup_id,
 		desc = "save ltex settings to files",
+	})
+
+	-- Quitting Neovim never fires LspDetach: the client's exit handler
+	-- schedules it, and Neovim is gone before the schedule runs. The client
+	-- is still attached during VimLeavePre, so save here too.
+	vim.api.nvim_create_autocmd("VimLeavePre", {
+		callback = function()
+			-- skip buffers already saved and detached (e.g. closed earlier)
+			if not vim.api.nvim_buf_is_valid(bufnr)
+				or not ltex_lsp.get_ltex(bufnr) then
+				return
+			end
+			on_exit({ buf = bufnr })
+		end,
+		group = augroup_id,
+		desc = "save ltex settings to files on exit",
 	})
 
 	vim.api.nvim_create_autocmd("BufEnter", {

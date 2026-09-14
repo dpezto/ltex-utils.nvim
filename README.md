@@ -195,7 +195,7 @@ Please note that in this case, you will be required to manually execute the `mks
 Using the mentioned configuration above, activate code actions by pressing `<leader>-ca`.
 Navigate to an LTeX issue within your text (LaTeX, Markdown, etc.), then press `<leader>-ca` and choose a suitable option from the menu to fix the problem.
 
-Whenever the LTeX server detaches from a buffer — closing the buffer, stopping the server, or quitting Neovim — its settings (including hidden false positives, disabled rules, used languages, and added dictionary words) are saved to disk.
+Whenever the LTeX server detaches from a buffer (closing the buffer or stopping the server) or Neovim quits, its settings (including hidden false positives, disabled rules, used languages, and added dictionary words) are saved to disk.
 Settings are saved in the same folder as your LaTeX/Markdown file, named after the document with its extension folded in and a leading dot, so `paper.tex` yields `.paper_tex_ltex.json` (the dot keeps it out of ordinary directory listings).
 Dictionaries are merged with existing (stored) ones and then saved to preserve all words.
 By default, dictionaries are saved in Neovim's state directory, although this can be customised (see [Installation](#installation)).
