@@ -146,6 +146,8 @@ For example, for `lazy.nvim` this could be done as follows.
       -- time to wait for language tool to complete parsing document
       -- debounce time in milliseconds
       debounce_time_ms = 500,
+      -- maximum time to wait for the first diagnostics before restoring settings
+      timeout_ms = 10000,
       -- use diagnostics data for modifying hiddenFalsePositives rules
       diags_false_pos = true,
       -- use diagnostics data for modifying disabledRules rules

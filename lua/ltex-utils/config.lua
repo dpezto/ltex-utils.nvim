@@ -53,12 +53,15 @@ local defaults = {
 	},
 	---@class Diagnostics.Config
 	---@field debounce_time_ms? integer
+	---@field timeout_ms? integer
 	---@field diags_false_pos boolean
 	---@field diags_disable_rules boolean
 	diagnostics = {
 		-- time to wait for language tool to complete parsing document
 		-- debounce time in milliseconds
 		debounce_time_ms = 500,
+		-- maximum time to wait for the first diagnostics before restoring settings
+		timeout_ms = 10000,
 		-- use diagnostics data for modifying hiddenFalsePositives rules
 		diags_false_pos = true,
 		-- use diagnostics data for modifying disabledRules rules

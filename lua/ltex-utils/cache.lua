@@ -371,12 +371,20 @@ function M:initialise_rules(telescope_cb, use_diags)
 	---@type vim.lsp.diagnostic.diagnostic[]
 	local acc_diags = {}
 
+	local restore, suspend_err = ltex_lsp.suspend_rules(client, setting_cfg)
+	if not restore then return false, suspend_err end
+
 	---@type function()
-	local final_diags_cb = function()
+	local final_diags_cb = function(timed_out)
 		-- restore handler again
 		client.handlers["textDocument/publishDiagnostics"] = old_handler
-		-- restore server settings
-		client.config.settings.ltex[setting_cfg] = settings
+		restore()
+		if timed_out then
+			client:notify("workspace/didChangeConfiguration", client.config.settings)
+			vim.notify("LTeXUtils: diagnostics collection failed or timed out; please retry",
+				vim.log.levels.WARN)
+			return
+		end
 		ltex_lsp.actions_from_diags(
 			client,
 			bufnr,
@@ -387,12 +395,16 @@ function M:initialise_rules(telescope_cb, use_diags)
 	end
 
 	-- Overwrite the diagnostics handler
-	client.handlers["textDocument/publishDiagnostics"] =
-		ltex_lsp.on_publish_diags(acc_diags, final_diags_cb)
+	local handler, cancel = ltex_lsp.on_publish_diags(acc_diags, final_diags_cb, old_handler)
+	client.handlers["textDocument/publishDiagnostics"] = handler
 
-	-- reset hiddenFalsePositives to get all possible code actions
-	client.config.settings.ltex[setting_cfg] = nil
-	client:notify("workspace/didChangeConfiguration", client.config.settings)
+	local ok, sent = pcall(client.notify, client, "workspace/didChangeConfiguration", client.config.settings)
+	if not ok or not sent then
+		cancel()
+		restore()
+		client.handlers["textDocument/publishDiagnostics"] = old_handler
+		return false, "Could not request diagnostics from LTeX"
+	end
 
 	return true
 end

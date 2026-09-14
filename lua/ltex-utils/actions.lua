@@ -56,13 +56,13 @@ function M.write_ltex_to_file(bufnr)
 	-- if no active ltex client abort
 	if not client then
 		vim.notify("No active ltex client found", vim.log.levels.ERROR)
-		return
+		return false, "No active ltex client found"
 	end
 
 	-- Use local variables to reduce table lookup cost
 	---@type table
-	local settings = client.config.settings.ltex
-	if not settings then return end
+	local settings = ltex_lsp.settings_for_save(client)
+	if not settings then return true end
 
 	---@type string[]
 	local langs
