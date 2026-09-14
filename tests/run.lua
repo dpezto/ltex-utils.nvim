@@ -1,5 +1,5 @@
 -- Minimal self-check: `nvim -l tests/run.lua` from the repository root.
--- Covers the pure logic; anything needing a live LTeX server is out of scope.
+-- Covers pure logic and mocked LSP/file persistence; no live server required.
 vim.opt.runtimepath:prepend(vim.fn.getcwd())
 
 local table_utils = require("ltex-utils.table_utils")
@@ -60,5 +60,7 @@ assert(c:delete_cb({ index = 2 }))
 c:reset_indices()
 assert(#c.data == 2 and c.data[2].text == "c")
 assert(select(1, c:delete_cb({ index = 99 })) == false)
+
+dofile("tests/regressions.lua")
 
 print("ok")
