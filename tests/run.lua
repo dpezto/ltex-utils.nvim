@@ -32,7 +32,6 @@ assert(vim.deep_equal(
 	{ "de", "en", "fr" }
 ))
 
-assert(table_utils.max_index({ [1] = "a", [7] = "b" }) == 7)
 
 -- hidden-false-positive rules round-trip, keeping ltex-ls' key order
 local rule = '{"rule":"UPPERCASE_SENTENCE_START","sentence":"^\\\\Qa b\\\\E$"}'
@@ -61,7 +60,7 @@ c:reset_indices()
 assert(#c.data == 2 and c.data[2].text == "c")
 assert(select(1, c:delete_cb({ index = 99 })) == false)
 
-dofile("tests/isolation.lua")
 dofile("tests/regressions.lua")
+dofile("tests/isolation.lua")
 
 print("ok")

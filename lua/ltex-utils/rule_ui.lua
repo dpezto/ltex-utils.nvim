@@ -3,7 +3,6 @@ local cache       = require("ltex-utils.cache")
 local diagnostics = require("ltex-utils.diagnostics")
 local hfp_cache   = require("ltex-utils.hfp_cache")
 local words_cache = require("ltex-utils.words_cache")
-local table_utils = require("ltex-utils.table_utils")
 local pickers     = require("ltex-utils.pickers")
 
 ---@class LTeXUtils.UI
@@ -26,7 +25,7 @@ end
 ---@param data table
 ---@return table
 function rule_ui.build_items(data)
-	local n     = table_utils.max_index(data)
+	local n     = table.maxn(data)
 	local items = {}
 	for i = 1, n do
 		local entry = data[i]
@@ -86,12 +85,6 @@ function rule_ui:open_modify_popup(item, use_diags, restore_flag)
 	end, { buffer = bufnr, noremap = false, silent = true })
 
 	self.cache.update_flag = restore_flag
-end
-
----Deletes an item from the cache.
----@param item table  picker item or telescope selection with `index` field
-function rule_ui:delete_item(item)
-	self.cache:delete_cb(item)
 end
 
 ---Removes deprecated (ERROR-severity) items from the given list and cache.

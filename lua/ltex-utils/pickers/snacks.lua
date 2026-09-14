@@ -29,7 +29,7 @@ function M.open(ui, opts)
 			ltex_delete = function(picker)
 				local item = picker:current()
 				if not item then return end
-				ui:delete_item(item)
+				ui.cache:delete_cb(item)
 				for i, v in ipairs(picker.opts.items) do
 					if v == item then
 						table.remove(picker.opts.items, i)

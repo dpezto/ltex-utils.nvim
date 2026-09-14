@@ -1,5 +1,4 @@
 local M = {}
-local Config = require("ltex-utils.config")
 local ltex_lsp = require("ltex-utils.ltex_lsp")
 
 ---Returns the namespace of LTeX LSP server for buffer `bufnr`; nil if not
@@ -12,17 +11,7 @@ function M.get_ltex_namespace(bufnr)
 	if not client then
 		return nil
 	end
-
-	---@type string
-	local lsp_server_name = "vim.lsp." .. Config.backend .. "."
-		.. tostring(client.id)
-	for ns, ns_metadata in pairs(vim.diagnostic.get_namespaces()) do
-		if vim.startswith(ns_metadata.name, lsp_server_name) then
-			return ns
-		end
-	end
-
-	return nil
+	return vim.lsp.diagnostic.get_namespace(client.id)
 end
 
 ---Toggles the LTeX diagnostics hints on/off

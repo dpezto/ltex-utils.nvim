@@ -19,7 +19,7 @@ function M.open(ui, opts)
 		func = function()
 			local item = MiniPick.get_picker_matches().current
 			if not item then return end
-			ui:delete_item(item)
+			ui.cache:delete_cb(item)
 			items = vim.tbl_filter(
 				function(v) return v.index ~= item.index end,
 				items

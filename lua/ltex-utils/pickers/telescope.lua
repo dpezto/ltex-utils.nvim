@@ -24,11 +24,10 @@ end
 ---@param prompt_bufnr integer
 local function cleanup_rules(ui, prompt_bufnr)
 	local action_state = require("telescope.actions.state")
-	local table_utils  = require("ltex-utils.table_utils")
 
 	local picker    = action_state.get_current_picker(prompt_bufnr)
 	local severities = vim.diagnostic.severity
-	local n          = table_utils.max_index(ui.cache.data)
+	local n          = table.maxn(ui.cache.data)
 	local row        = 0
 
 	for i = 1, n do
@@ -40,7 +39,7 @@ local function cleanup_rules(ui, prompt_bufnr)
 			elseif entry.type == severities[1] then
 				picker:set_selection(row)
 				picker:delete_selection(function(selection)
-					ui:delete_item(selection)
+					ui.cache:delete_cb(selection)
 				end)
 			end
 			row = row + 1
@@ -100,7 +99,7 @@ function M.open(ui, opts)
 			map('n', opts.keys.delete, function(prompt_bufnr)
 				local picker = action_state.get_current_picker(prompt_bufnr)
 				picker:delete_selection(function(selection)
-					ui:delete_item(selection)
+					ui.cache:delete_cb(selection)
 				end)
 			end)
 
