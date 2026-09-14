@@ -133,11 +133,9 @@ function M.load_ltex_from_file(bufnr)
 	local saved_settings, err = settings_io.read_settings(
 		ltex_filename(settings_filename)
 	)
-	-- return error; we get here when opening a fresh tex-file
-	-- without an existing config.
-	if not saved_settings then
-		return false, err
-	end
+	-- A new document still needs the user's shared dictionaries.
+	local missing = not saved_settings and err and err:sub(1, 6) == "ENOENT"
+	if not saved_settings and not missing then return false, err end
 
 	---@type table<string, string[]>
 	local client_settings = client.config.settings.ltex
@@ -145,20 +143,30 @@ function M.load_ltex_from_file(bufnr)
 		client_settings = {}
 		client.config.settings.ltex = client_settings
 	end
-	client_settings.hiddenFalsePositives = saved_settings.hiddenFalsePositives
-	client_settings.disabledRules = saved_settings.disabledRules
-
-	if saved_settings.langs then
-		-- read the required dictionaries
-		client_settings.dictionary = settings_io.load_dictionaries(
-			saved_settings.langs
+	if saved_settings then
+		client_settings.hiddenFalsePositives = saved_settings.hiddenFalsePositives
+		client_settings.disabledRules = saved_settings.disabledRules
+		if saved_settings.langs then
+			client_settings.dictionary = settings_io.load_dictionaries(saved_settings.langs)
+		end
+	else
+		-- en-US is LTeX's default when no language is configured.
+		local langs = table_utils.merge_lists_unique(
+			vim.tbl_keys(client_settings.dictionary or {}),
+			{ client_settings.language or "en-US" }
 		)
+		for lang, words in pairs(settings_io.load_dictionaries(langs)) do
+			client_settings.dictionary = client_settings.dictionary or {}
+			client_settings.dictionary[lang] = table_utils.merge_lists_unique(
+				client_settings.dictionary[lang], words)
+		end
 	end
 
 	client:notify(
 		"workspace/didChangeConfiguration",
 		client.config.settings
 	)
+	if missing then return false, err end
 	return true, nil
 end
 
