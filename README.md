@@ -146,8 +146,6 @@ For example, for `lazy.nvim` this could be done as follows.
       -- time to wait for language tool to complete parsing document
       -- debounce time in milliseconds
       debounce_time_ms = 500,
-      -- maximum time to wait for the first diagnostics before restoring settings
-      timeout_ms = 10000,
       -- use diagnostics data for modifying hiddenFalsePositives rules
       diags_false_pos = true,
       -- use diagnostics data for modifying disabledRules rules
@@ -199,7 +197,9 @@ Navigate to an LTeX issue within your text (LaTeX, Markdown, etc.), then press `
 
 Whenever the LTeX server detaches from a buffer (closing the buffer or stopping the server) or Neovim quits, its settings (including hidden false positives, disabled rules, used languages, and added dictionary words) are saved to disk.
 Settings are saved in the same folder as your LaTeX/Markdown file, named after the document with its extension folded in and a leading dot, so `paper.tex` yields `.paper_tex_ltex.json` (the dot keeps it out of ordinary directory listings).
+Hidden false positives and disabled rules are kept per document, including when several documents share one LTeX client; dictionaries stay shared.
 Dictionaries are merged with existing (stored) ones and then saved to preserve all words.
+Languages that use the same dictionary filename are combined into a single file write.
 By default, dictionaries are saved in Neovim's state directory, although this can be customised (see [Installation](#installation)).
 
 You can manually save settings with the `:LTeXUtils write_settings_to_file` command, and reload them with `:LTeXUtils load_settings_from_file`.

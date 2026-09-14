@@ -1,6 +1,7 @@
 local M = {}
 
 local Config = require("ltex-utils.config")
+local documents = require("ltex-utils.document_settings")
 local ltex_lsp = require("ltex-utils.ltex_lsp")
 local settings_io = require("ltex-utils.settings_io")
 local table_utils = require("ltex-utils.table_utils")
@@ -22,25 +23,25 @@ end
 ---and 'setting_cfg' fields.
 ---@param cmd_cfg string The key for the code action command
 ---@param setting_cfg string The key of the server settings
----@return function(vim.lsp.diagnostic.action.command) # The code action handler
+---@return fun(command: lsp.Command, ctx: table) # The code action handler
 function M.new_handler(cmd_cfg, setting_cfg)
-	return function (command)
+	return function (command, ctx)
 		---@type table|nil
-		local client = ltex_lsp.get_ltex()
+		local argument = command.arguments[1]
+		local bufnr = argument.uri and vim.uri_to_bufnr(argument.uri)
+			or (ctx and ctx.bufnr) or vim.api.nvim_get_current_buf()
+		local client = ltex_lsp.get_ltex(bufnr)
 		-- if no active ltex client abort
 		if not client then return end
 
 		---@type table<string, string[]>
-		local settings = ltex_lsp.get_settings_or_init(client, setting_cfg)
+		local settings = ltex_lsp.get_settings_or_init(client, setting_cfg, bufnr)
 
 		for lang, rules in pairs(command.arguments[1][cmd_cfg]) do
-			table_utils.extend_or_init(settings[setting_cfg], lang, rules)
+			settings[setting_cfg][lang] = vim.list_extend(settings[setting_cfg][lang] or {}, rules)
 		end
 
-		client:notify(
-			"workspace/didChangeConfiguration",
-			client.config.settings
-		)
+		ltex_lsp.notify_settings(client)
 	end
 end
 
@@ -61,7 +62,7 @@ function M.write_ltex_to_file(bufnr)
 
 	-- Use local variables to reduce table lookup cost
 	---@type table
-	local settings = ltex_lsp.settings_for_save(client)
+	local settings = ltex_lsp.settings_for_save(client, bufnr)
 	if not settings then return true end
 
 	---@type string[]
@@ -75,9 +76,9 @@ function M.write_ltex_to_file(bufnr)
 	else
 		-- save dictionaries; update them if necessary
 		if settings.dictionary then
-			local err = settings_io.ensure_folder_exists(Config.dictionary.path)
-			if err then return false, err end
-			langs, err = settings_io.update_dictionary_files(settings.dictionary)
+			local ok, err = pcall(vim.fn.mkdir, Config.dictionary.path, "p")
+			if not ok then return false, err end
+			langs, err = settings_io.update_dictionary_files(settings.dictionary, bufnr)
 			if not langs then return false, err end
 		end
 	end
@@ -137,35 +138,24 @@ function M.load_ltex_from_file(bufnr)
 	local missing = not saved_settings and err and err:sub(1, 6) == "ENOENT"
 	if not saved_settings and not missing then return false, err end
 
-	---@type table<string, string[]>
-	local client_settings = client.config.settings.ltex
-	if not client_settings then
-		client_settings = {}
-		client.config.settings.ltex = client_settings
-	end
 	if saved_settings then
-		client_settings.hiddenFalsePositives = saved_settings.hiddenFalsePositives
-		client_settings.disabledRules = saved_settings.disabledRules
-		if saved_settings.langs then
-			client_settings.dictionary = settings_io.load_dictionaries(saved_settings.langs)
-		end
-	else
-		-- en-US is LTeX's default when no language is configured.
-		local langs = table_utils.merge_lists_unique(
-			vim.tbl_keys(client_settings.dictionary or {}),
-			{ client_settings.language or "en-US" }
-		)
-		for lang, words in pairs(settings_io.load_dictionaries(langs)) do
-			client_settings.dictionary = client_settings.dictionary or {}
-			client_settings.dictionary[lang] = table_utils.merge_lists_unique(
-				client_settings.dictionary[lang], words)
-		end
+		local doc = documents.get(client, bufnr)
+		doc.hiddenFalsePositives = saved_settings.hiddenFalsePositives
+		doc.disabledRules = saved_settings.disabledRules
 	end
 
-	client:notify(
-		"workspace/didChangeConfiguration",
-		client.config.settings
-	)
+	-- Dictionaries are shared by every document on the client: merge, never
+	-- replace, so other documents' unsaved words survive.
+	-- en-US is LTeX's default when no language is configured.
+	local shared = documents.shared(client)
+	local langs = saved_settings and saved_settings.langs
+		or { shared.language or "en-US" }
+	for lang, words in pairs(settings_io.load_dictionaries(langs, bufnr)) do
+		shared.dictionary = shared.dictionary or {}
+		shared.dictionary[lang] = table_utils.merge_lists_unique(shared.dictionary[lang], words)
+	end
+
+	ltex_lsp.notify_settings(client)
 	if missing then return false, err end
 	return true, nil
 end

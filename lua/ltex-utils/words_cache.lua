@@ -1,8 +1,8 @@
 local cache = require("ltex-utils.cache")
 local Config = require("ltex-utils.config")
 local ltex_lsp = require("ltex-utils.ltex_lsp")
+local documents = require("ltex-utils.document_settings")
 local settings_io = require("ltex-utils.settings_io")
-local table_utils = require("ltex-utils.table_utils")
 
 ---@class LTeXUtils.words_cache : LTeXUtils.cache
 ---@field langs string[]
@@ -36,7 +36,7 @@ function M:apply_cache(bufnr)
 
 	-- we can't use `pairs(...)` because it doesn't guarantee the order
 	---@type integer
-	local n = table_utils.max_index(self.data)
+	local n = table.maxn(self.data)
 	for i = 1, n do
 		---@type Telescope.entry
 		local entry = self.data[i]
@@ -48,13 +48,10 @@ function M:apply_cache(bufnr)
 			table.insert(dicts[lang], word)
 		end
 	end
-	local folder_err = settings_io.ensure_folder_exists(Config.dictionary.path)
-	if folder_err then return false, folder_err end
+	local folder_ok, folder_err = pcall(vim.fn.mkdir, Config.dictionary.path, "p")
+	if not folder_ok then return false, folder_err end
 
-	for lang, dict in pairs(dicts) do
-		---@type string
-		local filename = Config.dictionary.path ..
-											Config.dictionary.filename(lang)
+	for filename, dict in pairs(settings_io.group_dictionaries(dicts, bufnr)) do
 		local ok, err = settings_io.write(
 			filename,
 			table.concat(dict, "\n") .. "\n",
@@ -72,8 +69,8 @@ function M:apply_cache(bufnr)
 		if not ok then return false, err end
 	end
 
-	client.config.settings.ltex[self.setting_cfg] = dicts
-	client:notify("workspace/didChangeConfiguration", client.config.settings)
+	documents.shared(client).dictionary = dicts
+	ltex_lsp.notify_settings(client)
 
 	-- clean up cache for later reuse
 	self.data = nil
@@ -94,7 +91,7 @@ local function add_saved_dicts(self, bufnr, settings)
 	local filename = vim.api.nvim_buf_get_name(bufnr)
 	---@type table<string, string[]>
 	local saved_dicts = {}
-	saved_dicts = settings_io.load_dictionaries(self.langs)
+	saved_dicts = settings_io.load_dictionaries(self.langs, bufnr)
 
 	for lang, dict in pairs(saved_dicts) do
 		for _, word in ipairs(dict) do
@@ -139,7 +136,7 @@ function M:initialise_rules(telescope_cb, _)
 
 	-- get server settings
 	---@type table|nil, string|nil
-	local settings, stgs_err = ltex_lsp.get_settings(client, setting_cfg)
+	local settings, stgs_err = ltex_lsp.get_settings(client, setting_cfg, bufnr)
 	if not settings then
 		return false, stgs_err or ("Server has no settings: " .. setting_cfg)
 	end

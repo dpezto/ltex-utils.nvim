@@ -61,6 +61,7 @@ c:reset_indices()
 assert(#c.data == 2 and c.data[2].text == "c")
 assert(select(1, c:delete_cb({ index = 99 })) == false)
 
+dofile("tests/isolation.lua")
 dofile("tests/regressions.lua")
 
 print("ok")

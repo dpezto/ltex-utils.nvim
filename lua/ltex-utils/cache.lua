@@ -1,45 +1,12 @@
 local ltex_lsp = require("ltex-utils.ltex_lsp")
-local table_utils = require("ltex-utils.table_utils")
+local documents = require("ltex-utils.document_settings")
 
--------------------------------------------------------------------------------
----auxiliary classes to document data structures of neovim diagnostics
-------------------------------
----@class vim.lsp.diagnostic.action.command.hfp_argument
----@field falsePositives table<string, string[]>
+-- ltex-ls code action arguments; everything else uses Neovim's lsp.* types
+---@class LTeXUtils.command_argument
 ---@field uri string
-
-
----@class vim.lsp.diagnostic.action.command.dr_argument
----@field ruleIds table<string, string[]>
----@field uri string
-
-
----@class vim.lsp.diagnostic.range
----@field ["end"] { character: integer, line: integer }
----@field start { character: integer, line: integer }
-
-
----@class vim.lsp.diagnostic.diagnostic
----@field code string
----@field codeDescription { href: string }
----@field message string
----@field range vim.lsp.diagnostic.range
----@field severity integer
----@field source string Identifier of LSP server
-
----@class vim.lsp.diagnostic.action.command
----@field arguments vim.lsp.diagnostic.action.command.hfp_argument[]|vim.lsp.diagnostic.action.command.dr_argument[]
----@field command string
----@field title string
-
-
----@class vim.lsp.diagnostic.action
----@field command vim.lsp.diagnostic.action.command
----@field diagnostics table[]
----@field kind string
----@field title string
--------------------------------------------------------------------------------
-
+---@field falsePositives? table<string, string[]>
+---@field ruleIds? table<string, string[]>
+---@field words? table<string, string[]>
 
 ---@type table<string, string>
 local setting_quickfix_map = {
@@ -121,7 +88,7 @@ function M:reset_indices()
 	---@type integer
 	local i = 1
 	---@type integer
-	local n = table_utils.max_index(self.data)
+	local n = table.maxn(self.data)
 	-- can't use `pairs(...)` here because order isn't guaranteed
 	for j = 1, n do
 		---@type Telescope.entry
@@ -207,10 +174,10 @@ function M:apply_cache(bufnr)
 			end
 		end
 	end
-	client.config.settings.ltex[self.setting_cfg] = res
+	documents.get(client, bufnr)[self.setting_cfg] = res
 
 	-- send updated settings to LSP server
-	client:notify("workspace/didChangeConfiguration", client.config.settings)
+	ltex_lsp.notify_settings(client)
 
 	self.data = nil
 	self.update_flag = false
@@ -252,7 +219,7 @@ local function process_rule(self, diags, lang_rule, filename, bufnr)
 end
 
 ---Returns respective quickfix from action
----@param actions vim.lsp.diagnostic.action[]
+---@param actions lsp.CodeAction[]
 ---@param setting_cfg string
 ---@return table|nil
 local function quickfix_from_action(actions, setting_cfg)
@@ -268,7 +235,7 @@ end
 ---@param self LTeXUtils.cache
 ---@param bufnr integer
 ---@param err string
----@param actions vim.lsp.diagnostic.action[]
+---@param actions lsp.CodeAction[]
 local function actions_cb(self, bufnr, err, actions)
 	if err then
 		vim.notify(
@@ -278,7 +245,7 @@ local function actions_cb(self, bufnr, err, actions)
 		return
 	end
 
-	---@type vim.lsp.diagnostic.action|nil
+	---@type lsp.CodeAction|nil
 	local quickfix = quickfix_from_action(actions, self.setting_cfg)
 	if not quickfix then
 		vim.notify("Error retrieving " .. self.setting_cfg .. " from actions")
@@ -340,7 +307,7 @@ function M:initialise_rules(telescope_cb, use_diags)
 
 	-- get server settings
 	---@type table<string, string[]>|nil, string|nil
-	local settings, stgs_err = ltex_lsp.get_settings(client, setting_cfg)
+	local settings, stgs_err = ltex_lsp.get_settings(client, setting_cfg, bufnr)
 	if not settings then
 		return false, stgs_err or ("Server has no settings: " .. setting_cfg)
 	end
@@ -354,24 +321,29 @@ function M:initialise_rules(telescope_cb, use_diags)
 		return true
 	end
 
-	---@type function(string, vim.lsp.diagnostic.action[])
+	---@type fun(err: any, actions: lsp.CodeAction[])
 	local process_action = function(err, actions)
 		actions_cb(self, bufnr, err, actions)
 	end
 
 	---@type function()
 	local final_actions_cb = function()
+		if vim.api.nvim_get_current_buf() ~= bufnr then
+			vim.notify("LTeXUtils: return to the original buffer and reopen the rule picker",
+				vim.log.levels.INFO)
+			return
+		end
 		self:sorted_rules_list(); telescope_cb()
 	end
 
-	---@type function(table, vim.lsp.diagnostic.diagnostic, table)
+	---@type lsp.Handler|nil
 	local old_handler = client.handlers["textDocument/publishDiagnostics"]
 
 	-- Initialise empty diagnostics table and nil timer
-	---@type vim.lsp.diagnostic.diagnostic[]
+	---@type lsp.PublishDiagnosticsParams[]
 	local acc_diags = {}
 
-	local restore, suspend_err = ltex_lsp.suspend_rules(client, setting_cfg)
+	local restore, suspend_err = ltex_lsp.suspend_rules(client, setting_cfg, bufnr)
 	if not restore then return false, suspend_err end
 
 	---@type function()
@@ -380,7 +352,7 @@ function M:initialise_rules(telescope_cb, use_diags)
 		client.handlers["textDocument/publishDiagnostics"] = old_handler
 		restore()
 		if timed_out then
-			client:notify("workspace/didChangeConfiguration", client.config.settings)
+			ltex_lsp.notify_settings(client)
 			vim.notify("LTeXUtils: diagnostics collection failed or timed out; please retry",
 				vim.log.levels.WARN)
 			return
@@ -395,10 +367,10 @@ function M:initialise_rules(telescope_cb, use_diags)
 	end
 
 	-- Overwrite the diagnostics handler
-	local handler, cancel = ltex_lsp.on_publish_diags(acc_diags, final_diags_cb, old_handler)
+	local handler, cancel = ltex_lsp.on_publish_diags(acc_diags, final_diags_cb, old_handler, vim.uri_from_bufnr(bufnr))
 	client.handlers["textDocument/publishDiagnostics"] = handler
 
-	local ok, sent = pcall(client.notify, client, "workspace/didChangeConfiguration", client.config.settings)
+	local ok, sent = pcall(ltex_lsp.notify_settings, client)
 	if not ok or not sent then
 		cancel()
 		restore()

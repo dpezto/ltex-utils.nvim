@@ -55,16 +55,6 @@ function M.read_dictionary(filename)
 		return nil, err
 	end
 
--------------------------------------------------------------------------------
-	---Delete this eventually. Only there to simplify switch to new
-	---dictionary file format.
-	---@cast data string
-	local ok_json, contents_json = pcall(vim.json.decode, data)
-	if ok_json and type(contents_json) == "table" then
-		return contents_json, nil
-	end
--------------------------------------------------------------------------------
-
 	---@cast data string
 	local dict = vim.split(vim.trim(data), "\n")
 	if dict[#dict] == "" then
@@ -132,12 +122,8 @@ function M.write(filepath, data, callback)
 		local ok, err = uv.fs_fchmod(fd, stat.mode)
 		if not ok then return fail(err) end
 	end
-	local offset = 0
-	while offset < #data do
-		local written, err = uv.fs_write(fd, data:sub(offset + 1), offset)
-		if not written or written == 0 then return fail(err or "short write") end
-		offset = offset + written
-	end
+	local written, write_err = uv.fs_write(fd, data, 0)
+	if written ~= #data then return fail(write_err or "short write") end
 	local synced, sync_err = uv.fs_fsync(fd)
 	if not synced then return fail(sync_err) end
 	local closed, close_err = uv.fs_close(fd)
@@ -149,65 +135,50 @@ function M.write(filepath, data, callback)
 	return true
 end
 
----Check if the folder exists and create it if not
----@param path string
----@return string|nil
-function M.ensure_folder_exists(path)
-	---@type table|nil, string|nil
-	local folder_stat, err_stat = uv.fs_stat(path)
-	-- If there's an error and the folder does not exist, create it
-	if not folder_stat and err_stat then
-		---@type boolean|nil, string|nil
-		local ok, err = uv.fs_mkdir(path, 448) -- octal representation of the permission bits (0700)
-		if not ok then
-			-- Handle any error during folder creation
-			vim.notify("Error creating folder: " .. vim.inspect(err), ERROR)
-			return err
-		end
-	end
-	-- If no error, the folder exists or has been created successfully
-	return nil
+---@param lang string
+---@param bufnr? integer
+---@return string
+function M.dictionary_filename(lang, bufnr)
+	return Config.dictionary.path .. Config.dictionary.filename(lang, bufnr)
 end
 
----Updates language-specific dictionary files avoiding duplicates.
----@param dictionaries table<string, string[]> Table with language keys and associated word lists.
----@return string[]|nil # A list of languages that have been updated.
+---Combine languages that share one file, retaining empty dictionaries for deletion.
+function M.group_dictionaries(dictionaries, bufnr)
+	local files = {}
+	for lang, words in pairs(dictionaries) do
+		local filename = M.dictionary_filename(lang, bufnr)
+		files[filename] = table_utils.merge_lists_unique(files[filename], words)
+	end
+	return files
+end
+
+---Merge dictionaries into their saved files, once per destination.
+---@return string[]|nil languages
 ---@return string|nil error
-function M.update_dictionary_files(dictionaries)
-	---@type string[]
-	local used_langs = {}
-	for lang, dict in pairs(dictionaries) do
-		---@type string
-		local filename = Config.dictionary.path ..
-											Config.dictionary.filename(lang)
-		---@type string[]|nil
+function M.update_dictionary_files(dictionaries, bufnr)
+	for filename, dict in pairs(M.group_dictionaries(dictionaries, bufnr)) do
 		local saved_dict, read_err = M.read_dictionary(filename)
 		if read_err and read_err:sub(1, 6) ~= "ENOENT" then
 			vim.notify(read_err, ERROR)
 			return nil, read_err
 		end
-		-- if there is already a saved dictionary merge it with current one
-		if saved_dict then
-			dict = table_utils.merge_lists_unique(dict, saved_dict)
-		end
+		dict = table_utils.merge_lists_unique(dict, saved_dict)
 		local ok, err = M.write(filename, table.concat(dict, "\n") .. "\n")
 		if not ok then return nil, err end
-		table.insert(used_langs, lang)
 	end
-
-	return used_langs
+	return vim.tbl_keys(dictionaries)
 end
 
 ---Loads the dictionaries at `Config.dictionary.path` for languages `langs`.
 ---@param langs string[] List of language identifiers
 ---@return table<string, string[]>
-function M.load_dictionaries(langs)
+function M.load_dictionaries(langs, bufnr)
 	---@type table<string, string[]>
 	local server_dics = {}
 	for _, lang in ipairs(langs) do
 		---@type string[]|nil, string|nil
 		local dict, err = M.read_dictionary(
-			Config.dictionary.path .. Config.dictionary.filename(lang)
+			M.dictionary_filename(lang, bufnr)
 		)
 		if err then
 			if string.sub(err, 1, 6) ~= 'ENOENT' then

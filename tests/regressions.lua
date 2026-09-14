@@ -1,6 +1,7 @@
 -- One check per fixed bug, against a mocked LSP client and real temp files.
 local config = require("ltex-utils.config")
 local lsp = require("ltex-utils.ltex_lsp")
+local documents = require("ltex-utils.document_settings")
 local actions = require("ltex-utils.actions")
 local settings_io = require("ltex-utils.settings_io")
 local cache = require("ltex-utils.cache")
@@ -18,7 +19,8 @@ local original_get_ltex, original_notify = lsp.get_ltex, vim.notify
 lsp.get_ltex = function() return client end
 vim.notify = function() end
 config.setup({ dictionary = { path = dir .. "/" },
-	diagnostics = { debounce_time_ms = 100, timeout_ms = 100 } })
+	diagnostics = { debounce_time_ms = 100 } })
+lsp.timeout_ms = 100
 
 local ok, err = xpcall(function()
 	-- code actions: diagnostics sent as an array; a failed request still finishes
@@ -41,18 +43,19 @@ local ok, err = xpcall(function()
 	client.config.settings.ltex = { disabledRules = { ["en-US"] = { "KEEP" } } }
 	local opened = false
 	assert(cache:new("disabledRules"):initialise_rules(function() opened = true end, true))
-	assert(client.config.settings.ltex.disabledRules == nil)
-	assert(vim.wait(1000, function() return client.config.settings.ltex.disabledRules ~= nil end))
+	assert(documents.get(client, bufnr).disabledRules == nil)
+	assert(vim.wait(1000, function() return documents.get(client, bufnr).disabledRules ~= nil end))
 	assert(client.handlers["textDocument/publishDiagnostics"] == original_handler and not opened)
 
 	-- diagnostics arriving just before the timeout still open the picker
 	assert(cache:new("disabledRules"):initialise_rules(function() opened = true end, true))
 	vim.wait(50)
-	client.handlers["textDocument/publishDiagnostics"](nil, { diagnostics = {} }, {})
+	client.handlers["textDocument/publishDiagnostics"](nil, { uri = vim.uri_from_bufnr(bufnr), diagnostics = {} }, {})
 	assert(vim.wait(1000, function() return opened end))
 
 	-- a document without a sidecar still loads its language's dictionary
 	assert(settings_io.write(dir .. "/en-US.txt", "saved\n"))
+	documents.forget(client, bufnr)
 	client.config.settings.ltex = {}
 	actions.load_ltex_from_file(bufnr)
 	assert(client.config.settings.ltex.dictionary["en-US"][1] == "saved")
@@ -67,8 +70,9 @@ local ok, err = xpcall(function()
 	assert(#vim.fn.glob(target .. ".*", false, true) == 0)
 end, debug.traceback)
 
-lsp.get_ltex, vim.notify = original_get_ltex, original_notify
+lsp.get_ltex, vim.notify, lsp.timeout_ms = original_get_ltex, original_notify, 10000
 config.setup()
+documents.forget(client, bufnr)
 vim.api.nvim_buf_delete(bufnr, { force = true })
 vim.fn.delete(dir, "rf")
 assert(ok, err)

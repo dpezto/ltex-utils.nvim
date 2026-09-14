@@ -4,7 +4,9 @@ local builtin = require("ltex-utils.builtin")
 local Config = require("ltex-utils.config")
 local ltex = require("ltex-utils.actions")
 local ltex_lsp = require("ltex-utils.ltex_lsp")
+local documents = require("ltex-utils.document_settings")
 local rule_ui = require("ltex-utils.rule_ui")
+local settings_io = require("ltex-utils.settings_io")
 
 -- Writes current LTeX LSP server settings to file
 ---@return string|nil  # error message if writing to file fails
@@ -67,6 +69,7 @@ local function autocmd_ltex(bufnr)
 			-- ignore other language servers detaching from this buffer
 			if not client or client.name ~= Config.backend then return end
 			on_exit(args)
+			documents.forget(client, bufnr)
 		end,
 		group = augroup_id,
 		desc = "save ltex settings to files",
@@ -115,28 +118,23 @@ function M.on_attach(bufnr)
 	local dict_handler = ltex.new_handler("words", "dictionary")
 	-- Add custom LSP commands for the ltex language server
 	cmds["_ltex.addToDictionary"] = Config.dictionary.use_vim_dict and
-	function(command)
-		dict_handler(command)
-		-- save previously used spelllang for current buffer
-		local spellfile = vim.api.nvim_get_option_value(
-			"spellfile",
-			{ buf = 0 }
-		)
-		for lang, words in pairs(command.arguments[1]["words"]) do
-			vim.api.nvim_set_option_value(
-				"spellfile",
-				Config.dictionary.path .. Config.dictionary.filename(lang),
-				{ buf = 0 }
-			)
-			for _, word in ipairs(words) do
-				vim.api.nvim_cmd({
-					cmd = "spellgood",
-					args = { word, },
-				}, { output = not Config.dictionary.vim_cmd_output, })
+	function(command, ctx)
+		dict_handler(command, ctx)
+		local bufnr = command.arguments[1].uri and vim.uri_to_bufnr(command.arguments[1].uri)
+			or (ctx and ctx.bufnr) or vim.api.nvim_get_current_buf()
+		local spellfile = vim.api.nvim_get_option_value("spellfile", { buf = bufnr })
+		local ok, err = pcall(vim.api.nvim_buf_call, bufnr, function()
+			for lang, words in pairs(command.arguments[1].words) do
+				vim.api.nvim_set_option_value("spellfile",
+					settings_io.dictionary_filename(lang, bufnr), { buf = bufnr })
+				for _, word in ipairs(words) do
+					vim.api.nvim_cmd({ cmd = "spellgood", args = { word } },
+						{ output = not Config.dictionary.vim_cmd_output })
+				end
 			end
-		end
-		-- restore spellfile and spelllang
-		vim.api.nvim_set_option_value("spellfile", spellfile, { buf = 0 } )
+		end)
+		vim.api.nvim_set_option_value("spellfile", spellfile, { buf = bufnr })
+		if not ok then vim.notify(tostring(err), vim.log.levels.ERROR) end
 	end or dict_handler
 
 	cmds["_ltex.hideFalsePositives"] = ltex.new_handler(

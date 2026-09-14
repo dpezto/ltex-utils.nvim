@@ -1,37 +1,47 @@
 local Config = require("ltex-utils.config")
+local documents = require("ltex-utils.document_settings")
 
 
 local M = {}
 
--- A client may ask for its settings again while diagnostics are collected.
--- Keep suppression in client.config, but expose the original rules to saves.
+-- how long to wait for the first diagnostics before restoring settings
+M.timeout_ms = 10000
+
+-- Suppression applies only to the document being inspected; saves retain its rules.
 local suspended = setmetatable({}, { __mode = "k" })
 
 ---@param client table
+---@param bufnr? integer
 ---@return table|nil
-function M.settings_for_save(client)
-	local settings = client.config.settings.ltex
+function M.settings_for_save(client, bufnr)
+	local settings = documents.merged(client, bufnr)
 	local pending = suspended[client]
-	if not pending then return settings end
-	settings = vim.deepcopy(settings)
-	settings[pending.key] = pending.rules
+	if pending and pending.settings == documents.get(client, bufnr) then
+		settings[pending.key] = pending.rules
+	end
 	return settings
 end
 
 ---@param client table
 ---@param key string
+---@param bufnr? integer
 ---@return function|nil restore
 ---@return string|nil error
-function M.suspend_rules(client, key)
+function M.suspend_rules(client, key, bufnr)
 	if suspended[client] then return nil, "LTeX diagnostics collection already in progress" end
-	local pending = { key = key, rules = client.config.settings.ltex[key] }
+	local settings = documents.get(client, bufnr)
+	local pending = { key = key, rules = settings[key], settings = settings }
 	suspended[client] = pending
-	client.config.settings.ltex[key] = nil
+	settings[key] = nil
 	return function()
 		if suspended[client] ~= pending then return end
-		client.config.settings.ltex[key] = pending.rules
+		settings[key] = pending.rules
 		suspended[client] = nil
 	end
+end
+
+function M.notify_settings(client)
+	return client:notify("workspace/didChangeConfiguration", { settings = client.config.settings })
 end
 
 ---Returns the first active LTeX LSP client attached to a buffer.
@@ -57,14 +67,10 @@ end
 ---'client'. Initializes an empty table for the 'option' if it doesn't exist.
 ---@param client table LTeX LSP client
 ---@param option string
+---@param bufnr? integer
 ---@return table<string, string[]>
-function M.get_settings_or_init(client, option)
-	---@type table
-	local settings = client.config.settings.ltex
-	if not settings then
-		settings = {}
-		client.config.settings.ltex = settings
-	end
+function M.get_settings_or_init(client, option, bufnr)
+	local settings = documents.owner(client, bufnr, option)
 
 	if not settings[option] then
 		settings[option] = {}
@@ -76,11 +82,11 @@ end
 ---Retrieves specified settings from the LTeX LSP server configuration.
 ---@param client table LTeX LSP client
 ---@param setting_cfg string The settings configuration to retrieve.
+---@param bufnr? integer
 ---@return table<string, string[]>|nil # Returns the settings table if found.
 ---@return string|nil # Returns nil and an error message if not found.
-function M.get_settings(client, setting_cfg)
-	---@type table
-	local settings = client.config.settings.ltex
+function M.get_settings(client, setting_cfg, bufnr)
+	local settings = documents.owner(client, bufnr, setting_cfg)
 
 	-- Check if active server has settings `setting_cfg`
 	if not settings or not settings[setting_cfg] then
@@ -98,9 +104,10 @@ end
 ---@param accumulated_diagnostics table Table to store diagnostics data
 ---@param callback fun(timed_out: boolean) Called on completion or timeout
 ---@param original_handler? function
----@return function(table, vim.lsp.diagnostic.diagnostic, table) # "textDocument/publishDiagnostics"-notification handler
+---@param uri? string Document whose diagnostics should be collected
+---@return function(table, lsp.PublishDiagnosticsParams, lsp.HandlerContext) # "textDocument/publishDiagnostics"-notification handler
 ---@return function cancel
-function M.on_publish_diags(accumulated_diagnostics, callback, original_handler)
+function M.on_publish_diags(accumulated_diagnostics, callback, original_handler, uri)
 	local diag_timer = vim.uv.new_timer()
 	local timeout_timer = vim.uv.new_timer()
 	local done = false
@@ -118,7 +125,7 @@ function M.on_publish_diags(accumulated_diagnostics, callback, original_handler)
 	end
 
 	-- Start immediately: the server may never publish a diagnostic notification.
-	timeout_timer:start(Config.diagnostics.timeout_ms, 0, vim.schedule_wrap(function()
+	timeout_timer:start(M.timeout_ms, 0, vim.schedule_wrap(function()
 		finish(true)
 	end))
 
@@ -131,6 +138,7 @@ function M.on_publish_diags(accumulated_diagnostics, callback, original_handler)
 			return
 		end
 		(original_handler or vim.lsp.diagnostic.on_publish_diagnostics)(err, result, ctx)
+		if uri and result.uri ~= uri then return end
 		table.insert(accumulated_diagnostics, result)
 		-- the server answered; only the debounce decides from here, however
 		-- long a large document takes to check
@@ -147,8 +155,8 @@ end
 ---final callback.
 ---@param client table The LTeX LSP server.
 ---@param bufnr integer The buffer number.
----@param diags vim.lsp.diagnostic.diagnostic List of diagnostics.
----@param process_action function(string, vim.lsp.diagnostic.action[]) Function to process each code action.
+---@param diags lsp.PublishDiagnosticsParams[] List of diagnostics.
+---@param process_action fun(err: any, actions: lsp.CodeAction[]) Function to process each code action.
 ---@param final_cb function() Function called when all requests have been processed.
 function M.actions_from_diags(client, bufnr, diags, process_action, final_cb)
 	---@type integer
@@ -159,7 +167,7 @@ function M.actions_from_diags(client, bufnr, diags, process_action, final_cb)
 
 	local function finish()
 		-- Restore the server before opening a picker, which may itself fail.
-		client:notify("workspace/didChangeConfiguration", client.config.settings)
+		M.notify_settings(client)
 		final_cb()
 	end
 	if pending_reqs == 0 then

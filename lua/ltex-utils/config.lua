@@ -9,7 +9,7 @@ local M = {}
 local defaults = {
 	---@class Dictionary.Config
 	---@field path? string
-	---@field filename? function(string): string
+	---@field filename? fun(lang: string, bufnr?: integer): string
   ---@field use_vim_dict? boolean
   ---@field vim_cmd_output? boolean
 	dictionary = {
@@ -53,15 +53,12 @@ local defaults = {
 	},
 	---@class Diagnostics.Config
 	---@field debounce_time_ms? integer
-	---@field timeout_ms? integer
 	---@field diags_false_pos boolean
 	---@field diags_disable_rules boolean
 	diagnostics = {
 		-- time to wait for language tool to complete parsing document
 		-- debounce time in milliseconds
 		debounce_time_ms = 500,
-		-- maximum time to wait for the first diagnostics before restoring settings
-		timeout_ms = 10000,
 		-- use diagnostics data for modifying hiddenFalsePositives rules
 		diags_false_pos = true,
 		-- use diagnostics data for modifying disabledRules rules
@@ -157,10 +154,10 @@ function M.setup(opts)
 		and {
 			dictionary = {
 				path = vim_dict_dir,
-				filename = function(lang)
+				filename = function(lang, bufnr)
 					local fileencoding = vim.api.nvim_get_option_value(
 						"fileencoding",
-						{ buf = 0 }
+						{ buf = bufnr or 0 }
 					)
 					if fileencoding == nil or fileencoding == "" then
 						fileencoding = "utf-8"
