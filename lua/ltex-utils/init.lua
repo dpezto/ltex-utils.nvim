@@ -15,10 +15,11 @@ local function on_exit(bufmeta)
 	-- delete current buffer from windows list
 	builtin.wins[bufnr] = nil
 
-	---@type boolean, string|nil
-	local ok, err = pcall(ltex.write_ltex_to_file, bufnr)
+	---@type boolean, boolean|string, string|nil
+	local ok, success, err = pcall(ltex.write_ltex_to_file, bufnr)
 
-	if not ok then
+	if not ok or success == false then
+		if not ok then err = success end
 		vim.notify("Error on exit: " .. vim.inspect(err), vim.log.levels.ERROR)
 		return err
 	end

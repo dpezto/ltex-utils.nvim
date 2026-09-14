@@ -98,29 +98,55 @@ function M.read_settings(filename)
 end
 
 ---Writes `data` to file at `filepath`. Synchronous so that writes triggered
----from BufUnload still complete before Neovim exits.
+---from VimLeavePre still complete before Neovim exits.
 ---@param filepath string path to target file
 ---@param data string data to write
 ---@param callback function|nil function to be executed after writing
+---@return boolean success
+---@return string|nil error
 function M.write(filepath, data, callback)
-	---@type integer|nil, nil|string
-	local fd, err_open = uv.fs_open(filepath, "w", 438) -- 438 = 0o666
-	if not fd then
-		vim.notify("Error opening file: " .. tostring(err_open), ERROR)
-		return
+	-- Preserve symlinks (for example dictionaries managed with dotfiles).
+	local link = uv.fs_lstat(filepath)
+	if link and link.type == "link" then
+		local target, err = uv.fs_realpath(filepath)
+		if not target then
+			vim.notify("Error resolving " .. filepath .. ": " .. tostring(err), ERROR)
+			return false, err
+		end
+		filepath = target
 	end
-
-	---@type integer|nil, nil|string
-	local _, err_write = uv.fs_write(fd, data, -1)
-	if err_write then
-		vim.notify("Error writing to file: " .. vim.inspect(err_write), ERROR)
+	-- Keep the temporary file beside its destination so rename is atomic.
+	local fd, temporary_or_err = uv.fs_mkstemp(filepath .. ".XXXXXX")
+	local temporary = fd and temporary_or_err or nil
+	local function fail(err)
+		if fd then uv.fs_close(fd) end
+		if temporary then uv.fs_unlink(temporary) end
+		local message = "Error writing " .. filepath .. ": " .. tostring(err)
+		vim.notify(message, ERROR)
+		return false, message
 	end
+	if not fd then return fail(temporary_or_err) end
 
-	uv.fs_close(fd)
-
-	if callback then
-		callback()
+	local stat = uv.fs_stat(filepath)
+	if stat then
+		local ok, err = uv.fs_fchmod(fd, stat.mode)
+		if not ok then return fail(err) end
 	end
+	local offset = 0
+	while offset < #data do
+		local written, err = uv.fs_write(fd, data:sub(offset + 1), offset)
+		if not written or written == 0 then return fail(err or "short write") end
+		offset = offset + written
+	end
+	local synced, sync_err = uv.fs_fsync(fd)
+	if not synced then return fail(sync_err) end
+	local closed, close_err = uv.fs_close(fd)
+	fd = nil
+	if not closed then return fail(close_err) end
+	local renamed, rename_err = uv.fs_rename(temporary, filepath)
+	if not renamed then return fail(rename_err) end
+	if callback then callback() end
+	return true
 end
 
 ---Check if the folder exists and create it if not
@@ -145,7 +171,8 @@ end
 
 ---Updates language-specific dictionary files avoiding duplicates.
 ---@param dictionaries table<string, string[]> Table with language keys and associated word lists.
----@return string[] # A list of languages that have been updated.
+---@return string[]|nil # A list of languages that have been updated.
+---@return string|nil error
 function M.update_dictionary_files(dictionaries)
 	---@type string[]
 	local used_langs = {}
@@ -154,12 +181,17 @@ function M.update_dictionary_files(dictionaries)
 		local filename = Config.dictionary.path ..
 											Config.dictionary.filename(lang)
 		---@type string[]|nil
-		local saved_dict = M.read_dictionary(filename)
+		local saved_dict, read_err = M.read_dictionary(filename)
+		if read_err and read_err:sub(1, 6) ~= "ENOENT" then
+			vim.notify(read_err, ERROR)
+			return nil, read_err
+		end
 		-- if there is already a saved dictionary merge it with current one
 		if saved_dict then
 			dict = table_utils.merge_lists_unique(dict, saved_dict)
 		end
-		M.write(filename, table.concat(dict, "\n") .. "\n")
+		local ok, err = M.write(filename, table.concat(dict, "\n") .. "\n")
+		if not ok then return nil, err end
 		table.insert(used_langs, lang)
 	end
 

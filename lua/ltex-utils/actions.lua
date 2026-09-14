@@ -75,8 +75,10 @@ function M.write_ltex_to_file(bufnr)
 	else
 		-- save dictionaries; update them if necessary
 		if settings.dictionary then
-			settings_io.ensure_folder_exists(Config.dictionary.path)
-			langs = settings_io.update_dictionary_files(settings.dictionary)
+			local err = settings_io.ensure_folder_exists(Config.dictionary.path)
+			if err then return false, err end
+			langs, err = settings_io.update_dictionary_files(settings.dictionary)
+			if not langs then return false, err end
 		end
 	end
 
@@ -101,7 +103,7 @@ function M.write_ltex_to_file(bufnr)
 
 	---@type string
 	local buf_filename = vim.api.nvim_buf_get_name(bufnr)
-	settings_io.write(
+	return settings_io.write(
 		ltex_filename(buf_filename),
 		vim.json.encode(settings_to_save)
 	)

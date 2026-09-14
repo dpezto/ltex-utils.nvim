@@ -48,16 +48,14 @@ function M:apply_cache(bufnr)
 			table.insert(dicts[lang], word)
 		end
 	end
-	client.config.settings.ltex[self.setting_cfg] = dicts
-
-	-- send updated settings to LSP server
-	client:notify("workspace/didChangeConfiguration", client.config.settings)
+	local folder_err = settings_io.ensure_folder_exists(Config.dictionary.path)
+	if folder_err then return false, folder_err end
 
 	for lang, dict in pairs(dicts) do
 		---@type string
 		local filename = Config.dictionary.path ..
 											Config.dictionary.filename(lang)
-		settings_io.write(
+		local ok, err = settings_io.write(
 			filename,
 			table.concat(dict, "\n") .. "\n",
 			Config.dictionary.use_vim_dict and function ()
@@ -71,7 +69,11 @@ function M:apply_cache(bufnr)
 				end)
 			end or nil
 		)
+		if not ok then return false, err end
 	end
+
+	client.config.settings.ltex[self.setting_cfg] = dicts
+	client:notify("workspace/didChangeConfiguration", client.config.settings)
 
 	-- clean up cache for later reuse
 	self.data = nil
