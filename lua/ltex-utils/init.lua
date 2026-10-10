@@ -14,6 +14,17 @@ local function on_exit(bufmeta)
 	---@type integer
 	local bufnr = bufmeta.buf
 
+	-- a picker still open (e.g. on `:qa`) never returned to the document, so
+	-- BufEnter didn't apply its edits yet
+	---@type LTeXUtils.UI|nil
+	local wins = builtin.wins[bufnr]
+	if wins ~= nil and wins.cache ~= nil then
+		local applied, apply_err = pcall(wins.cache.apply_cache, wins.cache, bufnr)
+		if not applied then
+			vim.notify("Error on exit: " .. vim.inspect(apply_err), vim.log.levels.ERROR)
+		end
+	end
+
 	-- delete current buffer from windows list
 	builtin.wins[bufnr] = nil
 
