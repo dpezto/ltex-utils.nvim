@@ -115,7 +115,8 @@ local ok, err = xpcall(function()
 	table.sort(applied)
 	assert(vim.deep_equal(applied, { "LATE", "NEW" }), vim.inspect(applied))
 
-	-- words accepted after the picker opened stay
+	-- language variants sharing a file drop a word deleted under either; words
+	-- accepted after the picker opened stay
 	config.setup({ dictionary = { path = dir .. "/", filename = function(lang)
 		return lang:match("^[^-]+") .. ".txt"
 	end } })
@@ -126,7 +127,8 @@ local ok, err = xpcall(function()
 	actions.new_handler("words", "dictionary")({ arguments = {
 		{ uri = vim.uri_from_bufnr(bufnr), words = { ["en-GB"] = { "late" } } } } })
 	assert(words:apply_cache(bufnr))
-	assert(vim.tbl_contains(client.settings.ltex.dictionary["en-GB"], "late"))
+	assert(vim.deep_equal(settings_io.read_dictionary(dir .. "/en.txt"), { "late" }))
+	assert(vim.deep_equal(client.settings.ltex.dictionary["en-GB"], { "late" }))
 end, debug.traceback)
 
 lsp.get_ltex, vim.notify, lsp.timeout_ms = original_get_ltex, original_notify, 10000

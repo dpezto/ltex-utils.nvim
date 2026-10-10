@@ -64,6 +64,25 @@ function M:apply_cache(bufnr)
 		end
 	end
 
+	-- languages sharing a file are one dictionary: a word removed under any of
+	-- them leaves all of them, or the other languages' copies would restore it
+	---@type table<string, table<string, true>>
+	local removed = {}
+	for text in pairs(self.initial) do
+		if not kept[text] then
+			local lang, word = self.selection_to_lang_rule({ text = text })
+			local filename = settings_io.dictionary_filename(lang, bufnr)
+			removed[filename] = removed[filename] or {}
+			removed[filename][word] = true
+		end
+	end
+	for lang, words in pairs(dicts) do
+		local gone = removed[settings_io.dictionary_filename(lang, bufnr)]
+		if gone then
+			dicts[lang] = vim.tbl_filter(function(word) return not gone[word] end, words)
+		end
+	end
+
 	local folder_ok, folder_err = pcall(vim.fn.mkdir, Config.dictionary.path, "p")
 	if not folder_ok then return false, folder_err end
 
