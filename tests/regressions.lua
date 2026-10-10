@@ -166,6 +166,13 @@ local ok, err = xpcall(function()
 	documents.forget(client, unnamed)
 	vim.api.nvim_buf_delete(unnamed, { force = true })
 
+	-- unchanged dictionaries are not rewritten on save
+	local writes, original_write = 0, settings_io.write
+	settings_io.write = function(...) writes = writes + 1 return original_write(...) end
+	local updated = settings_io.update_dictionary_files({ ["en-US"] = { "saved" } }, bufnr)
+	settings_io.write = original_write
+	assert(updated and writes == 0)
+
 	-- a directory without trailing separator; language variants sharing a file
 	-- drop a word deleted under either; words accepted after the picker opened stay
 	config.setup({ dictionary = { path = dir, filename = function(lang)
