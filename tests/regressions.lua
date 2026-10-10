@@ -115,6 +115,13 @@ local ok, err = xpcall(function()
 	table.sort(applied)
 	assert(vim.deep_equal(applied, { "LATE", "NEW" }), vim.inspect(applied))
 
+	-- an unnamed buffer loads dictionaries and saves without a settings file
+	local unnamed = vim.api.nvim_create_buf(true, false)
+	local loaded, load_err = actions.load_ltex_from_file(unnamed)
+	assert(not loaded and load_err == nil and actions.write_ltex_to_file(unnamed))
+	documents.forget(client, unnamed)
+	vim.api.nvim_buf_delete(unnamed, { force = true })
+
 	-- language variants sharing a file drop a word deleted under either; words
 	-- accepted after the picker opened stay
 	config.setup({ dictionary = { path = dir .. "/", filename = function(lang)
