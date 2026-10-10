@@ -41,7 +41,7 @@ function M.suspend_rules(client, key, bufnr)
 end
 
 function M.notify_settings(client)
-	return client:notify("workspace/didChangeConfiguration", { settings = client.config.settings })
+	return client:notify("workspace/didChangeConfiguration", { settings = client.settings })
 end
 
 ---Returns the first active LTeX LSP client attached to a buffer.

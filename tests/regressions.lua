@@ -13,7 +13,9 @@ local bufnr = vim.api.nvim_create_buf(true, false)
 vim.api.nvim_buf_set_name(bufnr, dir .. "/new.md")
 vim.api.nvim_set_current_buf(bufnr)
 
-local client = { config = { settings = { ltex = {} } }, handlers = {} }
+-- started without `settings`: client.config.settings stays nil
+local client = { id = 98, name = config.backend, config = {}, settings = { ltex = {} },
+	handlers = {}, offset_encoding = "utf-16" }
 function client:notify() return true end
 local original_get_ltex, original_notify = lsp.get_ltex, vim.notify
 lsp.get_ltex = function() return client end
@@ -40,7 +42,7 @@ local ok, err = xpcall(function()
 	-- no diagnostics at all: the timeout restores rules without opening the picker
 	local original_handler = function() end
 	client.handlers["textDocument/publishDiagnostics"] = original_handler
-	client.config.settings.ltex = { disabledRules = { ["en-US"] = { "KEEP" } } }
+	client.settings.ltex = { disabledRules = { ["en-US"] = { "KEEP" } } }
 	local opened = false
 	assert(cache:new("disabledRules"):initialise_rules(function() opened = true end, true))
 	assert(documents.get(client, bufnr).disabledRules == nil)
@@ -56,9 +58,9 @@ local ok, err = xpcall(function()
 	-- a document without a sidecar still loads its language's dictionary
 	assert(settings_io.write(dir .. "/en-US.txt", "saved\n"))
 	documents.forget(client, bufnr)
-	client.config.settings.ltex = {}
+	client.settings.ltex = {}
 	actions.load_ltex_from_file(bufnr)
-	assert(client.config.settings.ltex.dictionary["en-US"][1] == "saved")
+	assert(client.settings.ltex.dictionary["en-US"][1] == "saved")
 
 	-- a failed write leaves the original file untouched and no temp file behind
 	local target, original_rename = dir .. "/atomic.txt", uv.fs_rename

@@ -1,7 +1,8 @@
 local M = {}
 
 -- Rules belong to one document. Everything else, dictionaries included (they
--- are one file per language anyway), stays shared in client.config.settings.
+-- are one file per language anyway), stays shared in client.settings (what
+-- Neovim answers the server with; client.config.settings may be nil).
 local PER_DOCUMENT = { "hiddenFalsePositives", "disabledRules" }
 
 ---@type table<table, { buffers: table<integer, table>, original: function|nil, handler: function }>
@@ -10,8 +11,8 @@ local clients = setmetatable({}, { __mode = "k" })
 ---@param client table
 ---@return table
 function M.shared(client)
-	client.config.settings.ltex = client.config.settings.ltex or {}
-	return client.config.settings.ltex
+	client.settings.ltex = client.settings.ltex or {}
+	return client.settings.ltex
 end
 
 ---Shared settings with this document's rules on top, as sent to the server.
