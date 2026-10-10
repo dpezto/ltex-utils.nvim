@@ -7,37 +7,17 @@ local M = {}
 -- how long to wait for the first diagnostics before restoring settings
 M.timeout_ms = 10000
 
--- Suppression applies only to the document being inspected; saves retain its rules.
-local suspended = setmetatable({}, { __mode = "k" })
-
----@param client table
----@param bufnr? integer
----@return table|nil
-function M.settings_for_save(client, bufnr)
-	local settings = documents.merged(client, bufnr)
-	local pending = suspended[client]
-	if pending and pending.settings == documents.get(client, bufnr) then
-		settings[pending.key] = pending.rules
-	end
-	return settings
-end
-
+---Withholds `key` rules of document `bufnr` from the server while its
+---diagnostics are collected; the document keeps them for code actions and saves.
 ---@param client table
 ---@param key string
 ---@param bufnr? integer
 ---@return function|nil restore
 ---@return string|nil error
 function M.suspend_rules(client, key, bufnr)
-	if suspended[client] then return nil, "LTeX diagnostics collection already in progress" end
-	local settings = documents.get(client, bufnr)
-	local pending = { key = key, rules = settings[key], settings = settings }
-	suspended[client] = pending
-	settings[key] = nil
-	return function()
-		if suspended[client] ~= pending then return end
-		settings[key] = pending.rules
-		suspended[client] = nil
-	end
+	local restore = documents.suspend(client, bufnr, key)
+	if not restore then return nil, "LTeX diagnostics collection already in progress" end
+	return restore
 end
 
 function M.notify_settings(client)

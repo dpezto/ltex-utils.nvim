@@ -18,8 +18,16 @@ local client = { id = 98, name = config.backend, config = {}, settings = { ltex 
 	handlers = {}, offset_encoding = "utf-16" }
 function client:notify() return true end
 local original_get_ltex, original_notify = lsp.get_ltex, vim.notify
+local original_by_id = vim.lsp.get_client_by_id
 lsp.get_ltex = function() return client end
+vim.lsp.get_client_by_id = function() return client end
 vim.notify = function() end
+-- what the server is told for this document
+local function served()
+	return client.handlers["workspace/configuration"](nil,
+		{ items = { { scopeUri = vim.uri_from_bufnr(bufnr), section = "ltex" } } },
+		{ client_id = client.id })[1]
+end
 config.setup({ dictionary = { path = dir .. "/" },
 	diagnostics = { debounce_time_ms = 100 } })
 lsp.timeout_ms = 100
@@ -45,8 +53,8 @@ local ok, err = xpcall(function()
 	client.settings.ltex = { disabledRules = { ["en-US"] = { "KEEP" } } }
 	local opened = false
 	assert(cache:new("disabledRules"):initialise_rules(function() opened = true end, true))
-	assert(documents.get(client, bufnr).disabledRules == nil)
-	assert(vim.wait(1000, function() return documents.get(client, bufnr).disabledRules ~= nil end))
+	assert(served().disabledRules == nil and documents.get(client, bufnr).disabledRules ~= nil)
+	assert(vim.wait(1000, function() return served().disabledRules ~= nil end))
 	assert(client.handlers["textDocument/publishDiagnostics"] == original_handler and not opened)
 
 	-- diagnostics arriving just before the timeout still open the picker
@@ -70,9 +78,31 @@ local ok, err = xpcall(function()
 	uv.fs_rename = original_rename
 	assert(not written and vim.fn.readfile(target)[1] == "original")
 	assert(#vim.fn.glob(target .. ".*", false, true) == 0)
+
+	-- a code action during diagnostics collection survives the restore
+	documents.forget(client, bufnr)
+	documents.get(client, bufnr).disabledRules = { ["en-US"] = { "KEEP" } }
+	local rules = cache:new("disabledRules")
+	opened = false
+	assert(rules:initialise_rules(function() opened = true end, true))
+	actions.new_handler("ruleIds", "disabledRules")({ arguments = {
+		{ uri = vim.uri_from_bufnr(bufnr), ruleIds = { ["en-US"] = { "NEW" } } } } })
+	assert(served().disabledRules == nil)
+	local wrong = { range = { start = { line = 0, character = 2 }, ["end"] = { line = 0, character = 7 } } }
+	function client:request(_, _, cb)
+		cb(nil, { { kind = "quickfix.ltex.disableRules", diagnostics = { wrong }, command = {
+			arguments = { { uri = "file://" .. dir .. "/a%20b.md", ruleIds = { ["en-US"] = { "R" } } } } } } })
+		return true
+	end
+	client.handlers["textDocument/publishDiagnostics"](nil,
+		{ uri = vim.uri_from_bufnr(bufnr), diagnostics = { wrong } }, {})
+	assert(vim.wait(1000, function() return opened end))
+	assert(vim.deep_equal(documents.get(client, bufnr).disabledRules["en-US"], { "KEEP", "NEW" }))
+	assert(vim.deep_equal(served().disabledRules["en-US"], { "KEEP", "NEW" }))
 end, debug.traceback)
 
 lsp.get_ltex, vim.notify, lsp.timeout_ms = original_get_ltex, original_notify, 10000
+vim.lsp.get_client_by_id = original_by_id
 config.setup()
 documents.forget(client, bufnr)
 vim.api.nvim_buf_delete(bufnr, { force = true })

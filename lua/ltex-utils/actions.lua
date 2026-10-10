@@ -62,8 +62,7 @@ function M.write_ltex_to_file(bufnr)
 
 	-- Use local variables to reduce table lookup cost
 	---@type table
-	local settings = ltex_lsp.settings_for_save(client, bufnr)
-	if not settings then return true end
+	local settings = documents.merged(client, bufnr)
 
 	---@type string[]
 	local langs
