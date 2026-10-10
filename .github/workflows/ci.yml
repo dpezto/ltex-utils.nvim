@@ -1,0 +1,57 @@
+name: ci
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    # weekly run so nvim-nightly API drift surfaces without waiting for a push
+    - cron: "0 6 * * 1"
+permissions:
+  contents: read
+jobs:
+  actionlint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: reviewdog/action-actionlint@1758727be30241166609dad4c97588b6ad411f32 # v1
+  test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        neovim: [stable, nightly]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: rhysd/action-setup-vim@febef33995d6649302e9d88dda81e071b68f16a7 # v1
+        with:
+          neovim: true
+          version: ${{ matrix.neovim }}
+      # Run nvim directly (no GNU Make dependency, which Windows runners lack);
+      # equivalent to `make test`. The ubuntu+stable leg instead runs under luacov.
+      - if: ${{ !(matrix.os == 'ubuntu-latest' && matrix.neovim == 'stable') }}
+        name: test
+        run: nvim --headless --clean -l tests/run.lua
+      # stable leg runs the same tests under luacov (Neovim is LuaJIT = Lua 5.1)
+      - if: matrix.os == 'ubuntu-latest' && matrix.neovim == 'stable'
+        name: test with coverage
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -yq luarocks lua5.1 liblua5.1-0-dev
+          luarocks --lua-version 5.1 --tree "$HOME/.luarocks" install luacov
+          luarocks --lua-version 5.1 --tree "$HOME/.luarocks" install luacov-reporter-lcov
+          export LUA_PATH="$HOME/.luarocks/share/lua/5.1/?.lua;$HOME/.luarocks/share/lua/5.1/?/init.lua;;"
+          COVERAGE=1 make test
+          "$HOME/.luarocks/bin/luacov" -r lcov
+          sed -i "s|^SF:$GITHUB_WORKSPACE/|SF:|" luacov.report.out
+      - if: matrix.os == 'ubuntu-latest' && matrix.neovim == 'stable'
+        uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7
+        with:
+          # Tokenless uploads are accepted for pull requests but rejected on
+          # pushes ("Token required - not valid tokenless upload"), so main's
+          # coverage only moves with the secret set. Absent secret degrades to
+          # tokenless rather than failing.
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: luacov.report.out
+          disable_search: true
+          fail_ci_if_error: false
