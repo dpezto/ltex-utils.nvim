@@ -32,6 +32,7 @@ local cfg_cmd_map = {
 ---@class LTeXUtils.cache
 ---@field data Telescope.entry[]
 ---@field initial table<string, true> Entry texts the settings held at initialisation
+---@field collecting boolean|nil Diagnostics collection still running
 ---@field setting_cfg string
 ---@field update_flag boolean
 local M = {}
@@ -364,12 +365,16 @@ function M:initialise_rules(telescope_cb, use_diags)
 
 	local restore, suspend_err = ltex_lsp.suspend_rules(client, setting_cfg, bufnr)
 	if not restore then return false, suspend_err end
+	self.collecting = true
 
 	---@type function()
 	local final_diags_cb = function(timed_out)
 		-- restore handler again
 		client.handlers["textDocument/publishDiagnostics"] = old_handler
 		restore()
+		-- a pending code action can't block new pickers; rule_ui drops
+		-- this one's picker if another cache replaced it meanwhile
+		self.collecting = nil
 		if timed_out then
 			ltex_lsp.notify_settings(client)
 			vim.notify("LTeXUtils: diagnostics collection failed or timed out; please retry",
@@ -393,6 +398,7 @@ function M:initialise_rules(telescope_cb, use_diags)
 	if not ok or not sent then
 		cancel()
 		restore()
+		self.collecting = nil
 		client.handlers["textDocument/publishDiagnostics"] = old_handler
 		return false, "Could not request diagnostics from LTeX"
 	end

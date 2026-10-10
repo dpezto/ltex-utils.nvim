@@ -135,11 +135,16 @@ end
 function rule_ui:new_pick_rule_win(setting_cfg, use_diags, opts)
 	opts = opts or {}
 
+	---@type LTeXUtils.cache|LTeXUtils.hfp_cache|LTeXUtils.words_cache
+	local win_cache = self.cache
+
 	---@type function()
 	local picker_cb = function()
+		-- a superseded initialisation must not open over another cache
+		if self.cache ~= win_cache then return end
 		pickers.open(self, {
 			title     = setting_cfg,
-			items     = rule_ui.build_items(self.cache.data),
+			items     = rule_ui.build_items(win_cache.data),
 			use_diags = use_diags,
 			keys = {
 				modify  = Config.rule_ui.modify_rule_key,
@@ -152,14 +157,12 @@ function rule_ui:new_pick_rule_win(setting_cfg, use_diags, opts)
 	end
 
 	-- cache already populated — open picker directly
-	if self.cache then
+	if win_cache then
 		picker_cb()
 		return true
 	end
 
 	-- first call — initialise cache then open picker
-	---@type LTeXUtils.cache|LTeXUtils.hfp_cache|LTeXUtils.words_cache
-	local win_cache
 	if setting_cfg == "hiddenFalsePositives" then
 		win_cache = hfp_cache:new(setting_cfg)
 	elseif setting_cfg == "disabledRules" then

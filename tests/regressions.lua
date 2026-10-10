@@ -6,6 +6,9 @@ local actions = require("ltex-utils.actions")
 local settings_io = require("ltex-utils.settings_io")
 local cache = require("ltex-utils.cache")
 local words_cache = require("ltex-utils.words_cache")
+local pickers = require("ltex-utils.pickers")
+local builtin = require("ltex-utils.builtin")
+local ltex_utils = require("ltex-utils")
 local uv = vim.uv
 
 local dir = vim.fn.tempname()
@@ -19,7 +22,7 @@ local client = { id = 98, name = config.backend, config = {}, settings = { ltex 
 	handlers = {}, offset_encoding = "utf-16" }
 function client:notify() return true end
 local original_get_ltex, original_notify = lsp.get_ltex, vim.notify
-local original_by_id = vim.lsp.get_client_by_id
+local original_by_id, original_open = vim.lsp.get_client_by_id, pickers.open
 lsp.get_ltex = function() return client end
 vim.lsp.get_client_by_id = function() return client end
 vim.notify = function() end
@@ -115,6 +118,19 @@ local ok, err = xpcall(function()
 	table.sort(applied)
 	assert(vim.deep_equal(applied, { "LATE", "NEW" }), vim.inspect(applied))
 
+	-- a second command while collecting is refused instead of replacing the cache
+	local open_flags = {}
+	pickers.open = function(ui) table.insert(open_flags, ui.cache.update_flag) end
+	documents.forget(client, bufnr)
+	ltex_utils.on_attach(bufnr)
+	documents.get(client, bufnr).disabledRules = { ["en-US"] = { "OLD" } }
+	builtin.modify_disabledRules()
+	local first = builtin.wins[bufnr].cache
+	builtin.modify_disabledRules()
+	assert(builtin.wins[bufnr].cache == first)
+	client.handlers["textDocument/publishDiagnostics"](nil, { uri = vim.uri_from_bufnr(bufnr), diagnostics = {} }, {})
+	assert(vim.wait(1000, function() return #open_flags == 1 end))
+
 	-- settings saved under the old file name move to the new one on load
 	local legacy = vim.api.nvim_create_buf(true, false)
 	vim.api.nvim_buf_set_name(legacy, dir .. "/old.v1.md")
@@ -152,7 +168,7 @@ local ok, err = xpcall(function()
 end, debug.traceback)
 
 lsp.get_ltex, vim.notify, lsp.timeout_ms = original_get_ltex, original_notify, 10000
-vim.lsp.get_client_by_id = original_by_id
+vim.lsp.get_client_by_id, pickers.open = original_by_id, original_open
 config.setup()
 documents.forget(client, bufnr)
 vim.api.nvim_buf_delete(bufnr, { force = true })

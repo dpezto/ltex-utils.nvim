@@ -21,6 +21,15 @@ local function new_win(setting_cfg, use_diags)
 		return
 	end
 
+	-- replacing the cache now would orphan the pending picker callback
+	if win.cache and win.cache.collecting then
+		vim.notify(
+			"LTeX diagnostics collection already in progress",
+			vim.log.levels.WARN
+		)
+		return
+	end
+
 	-- delete old cache
 	win.cache = nil
 	---@type boolean, string|nil
