@@ -89,7 +89,7 @@ local ok, err = xpcall(function()
 	assert(#vim.fn.glob(target .. ".*", false, true) == 0)
 
 	-- a code action during diagnostics collection survives the restore; columns
-	-- are bytes, not UTF-16 units
+	-- are bytes, not UTF-16 units; percent-encoded URIs become file names
 	vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, { "é wrong" })
 	documents.forget(client, bufnr)
 	documents.get(client, bufnr).disabledRules = { ["en-US"] = { "KEEP" } }
@@ -111,7 +111,7 @@ local ok, err = xpcall(function()
 	assert(vim.deep_equal(documents.get(client, bufnr).disabledRules["en-US"], { "KEEP", "NEW" }))
 	assert(vim.deep_equal(served().disabledRules["en-US"], { "KEEP", "NEW" }))
 	local proposed = find(rules.data, "en-US: R")
-	assert(proposed.col == 4, vim.inspect(proposed))
+	assert(proposed.col == 4 and proposed.filename == dir .. "/a b.md", vim.inspect(proposed))
 
 	-- applying the picker keeps rules added after it opened
 	assert(rules:delete_cb({ index = select(2, find(rules.data, "en-US: KEEP")) }))

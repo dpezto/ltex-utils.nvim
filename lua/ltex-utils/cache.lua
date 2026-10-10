@@ -275,7 +275,7 @@ local function actions_cb(self, bufnr, err, actions)
 	local encoding = client and client.offset_encoding or "utf-16"
 	for i, argument in ipairs(quickfix.command.arguments) do
 		---@type string
-		local filename = argument.uri and argument.uri:sub(8)
+		local filename = argument.uri and vim.uri_to_fname(argument.uri)
 				or vim.api.nvim_buf_get_name(bufnr)
 		local diag = quickfix.diagnostics[i]
 		-- LSP columns count `encoding` units; pickers and cursors want bytes
