@@ -118,7 +118,8 @@ local ok, err = xpcall(function()
 	table.sort(applied)
 	assert(vim.deep_equal(applied, { "LATE", "NEW" }), vim.inspect(applied))
 
-	-- a second command while collecting is refused instead of replacing the cache
+	-- a second command while collecting is refused instead of replacing the cache;
+	-- the edit popup reopens the picker already dirty (mini.pick blocks in open)
 	local open_flags = {}
 	pickers.open = function(ui) table.insert(open_flags, ui.cache.update_flag) end
 	documents.forget(client, bufnr)
@@ -130,6 +131,10 @@ local ok, err = xpcall(function()
 	assert(builtin.wins[bufnr].cache == first)
 	client.handlers["textDocument/publishDiagnostics"](nil, { uri = vim.uri_from_bufnr(bufnr), diagnostics = {} }, {})
 	assert(vim.wait(1000, function() return #open_flags == 1 end))
+	builtin.wins[bufnr]:open_modify_popup({ text = "en-US: OLD", index = 1 }, true, false)
+	vim.api.nvim_buf_set_lines(0, 0, -1, false, { "EDITED" })
+	vim.fn.maparg("<CR>", "n", false, true).callback()
+	assert(open_flags[2] == true and first.update_flag)
 
 	-- settings saved under the old file name move to the new one on load
 	local legacy = vim.api.nvim_create_buf(true, false)

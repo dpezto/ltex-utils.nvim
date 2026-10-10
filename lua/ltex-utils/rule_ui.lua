@@ -78,10 +78,13 @@ function rule_ui:open_modify_popup(item, use_diags, restore_flag)
 		local new_rule = vim.api.nvim_buf_get_lines(bufnr, 0, 1, false)[1]
 		self.cache:update_entry(item.index, self.cache.lang_rule_to_str(lang, new_rule))
 		self.cache:reset_indices()
+		-- closing the popup re-enters the document: don't apply yet
 		self.cache.update_flag = false
 		vim.api.nvim_win_close(win_id, true)
-		self:new_pick_rule_win(self.cache.setting_cfg, use_diags, Config.rule_ui.picker)
+		-- dirty before reopening: mini.pick blocks until its picker closes,
+		-- and that close must apply the edit
 		self.cache.update_flag = true
+		self:new_pick_rule_win(self.cache.setting_cfg, use_diags, Config.rule_ui.picker)
 	end, { buffer = bufnr, noremap = false, silent = true })
 
 	self.cache.update_flag = restore_flag
