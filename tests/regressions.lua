@@ -162,9 +162,9 @@ local ok, err = xpcall(function()
 	documents.forget(client, unnamed)
 	vim.api.nvim_buf_delete(unnamed, { force = true })
 
-	-- language variants sharing a file drop a word deleted under either; words
-	-- accepted after the picker opened stay
-	config.setup({ dictionary = { path = dir .. "/", filename = function(lang)
+	-- a directory without trailing separator; language variants sharing a file
+	-- drop a word deleted under either; words accepted after the picker opened stay
+	config.setup({ dictionary = { path = dir, filename = function(lang)
 		return lang:match("^[^-]+") .. ".txt"
 	end } })
 	client.settings.ltex = { dictionary = { ["en-US"] = { "foo" }, ["en-GB"] = { "foo" } } }

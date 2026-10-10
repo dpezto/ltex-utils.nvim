@@ -139,7 +139,7 @@ end
 ---@param bufnr? integer
 ---@return string
 function M.dictionary_filename(lang, bufnr)
-	return Config.dictionary.path .. Config.dictionary.filename(lang, bufnr)
+	return vim.fs.joinpath(Config.dictionary.path, Config.dictionary.filename(lang, bufnr))
 end
 
 ---Combine languages that share one file, retaining empty dictionaries for deletion.
