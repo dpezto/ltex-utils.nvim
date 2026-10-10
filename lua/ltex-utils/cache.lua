@@ -31,6 +31,7 @@ local cfg_cmd_map = {
 
 ---@class LTeXUtils.cache
 ---@field data Telescope.entry[]
+---@field initial table<string, true> Entry texts the settings held at initialisation
 ---@field setting_cfg string
 ---@field update_flag boolean
 local M = {}
@@ -161,12 +162,15 @@ function M:apply_cache(bufnr)
 
 	---@type table<string, string[]>
 	local res = {}
+	---@type table<string, true>
+	local kept = {}
 
 	for _, selection in pairs(self.data) do
 		-- skip diagnostics-only entries; they are not server rules
 		if selection.type ~= severities[2] then
 			---@type string, string
 			local lang, rule = self.selection_to_lang_rule(selection)
+			kept[selection.text] = true
 			if not res[lang] then
 				res[lang] = { rule }
 			else
@@ -174,12 +178,26 @@ function M:apply_cache(bufnr)
 			end
 		end
 	end
-	documents.get(client, bufnr)[self.setting_cfg] = res
+
+	-- keep rules added (e.g. by a code action) after the picker opened
+	local doc = documents.get(client, bufnr)
+	for lang, rules in pairs(doc[self.setting_cfg] or {}) do
+		for _, rule in ipairs(rules) do
+			local text = self.lang_rule_to_str(lang, rule)
+			if not self.initial[text] and not kept[text] then
+				kept[text] = true
+				res[lang] = res[lang] or {}
+				table.insert(res[lang], rule)
+			end
+		end
+	end
+	doc[self.setting_cfg] = res
 
 	-- send updated settings to LSP server
 	ltex_lsp.notify_settings(client)
 
 	self.data = nil
+	self.initial = nil
 	self.update_flag = false
 	self.setting_cfg = nil
 
@@ -314,6 +332,7 @@ function M:initialise_rules(telescope_cb, use_diags)
 
 	-- initialise rules table with server settings
 	self.data = {}; self:extract_rules(settings, bufnr)
+	self.initial = vim.tbl_map(function() return true end, self.data)
 
 	-- if no diags need to be included return table
 	if not use_diags then

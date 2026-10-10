@@ -5,6 +5,7 @@ local documents = require("ltex-utils.document_settings")
 local actions = require("ltex-utils.actions")
 local settings_io = require("ltex-utils.settings_io")
 local cache = require("ltex-utils.cache")
+local words_cache = require("ltex-utils.words_cache")
 local uv = vim.uv
 
 local dir = vim.fn.tempname()
@@ -27,6 +28,11 @@ local function served()
 	return client.handlers["workspace/configuration"](nil,
 		{ items = { { scopeUri = vim.uri_from_bufnr(bufnr), section = "ltex" } } },
 		{ client_id = client.id })[1]
+end
+local function find(data, text)
+	for i, entry in pairs(data) do
+		if entry.text == text then return entry, i end
+	end
 end
 config.setup({ dictionary = { path = dir .. "/" },
 	diagnostics = { debounce_time_ms = 100 } })
@@ -99,6 +105,28 @@ local ok, err = xpcall(function()
 	assert(vim.wait(1000, function() return opened end))
 	assert(vim.deep_equal(documents.get(client, bufnr).disabledRules["en-US"], { "KEEP", "NEW" }))
 	assert(vim.deep_equal(served().disabledRules["en-US"], { "KEEP", "NEW" }))
+
+	-- applying the picker keeps rules added after it opened
+	assert(rules:delete_cb({ index = select(2, find(rules.data, "en-US: KEEP")) }))
+	actions.new_handler("ruleIds", "disabledRules")({ arguments = {
+		{ uri = vim.uri_from_bufnr(bufnr), ruleIds = { ["en-US"] = { "LATE" } } } } })
+	assert(rules:apply_cache(bufnr))
+	local applied = documents.get(client, bufnr).disabledRules["en-US"]
+	table.sort(applied)
+	assert(vim.deep_equal(applied, { "LATE", "NEW" }), vim.inspect(applied))
+
+	-- words accepted after the picker opened stay
+	config.setup({ dictionary = { path = dir .. "/", filename = function(lang)
+		return lang:match("^[^-]+") .. ".txt"
+	end } })
+	client.settings.ltex = { dictionary = { ["en-US"] = { "foo" }, ["en-GB"] = { "foo" } } }
+	local words = words_cache:new("dictionary")
+	assert(words:initialise_rules(function() end))
+	assert(words:delete_cb({ index = select(2, find(words.data, "en-US: foo")) }))
+	actions.new_handler("words", "dictionary")({ arguments = {
+		{ uri = vim.uri_from_bufnr(bufnr), words = { ["en-GB"] = { "late" } } } } })
+	assert(words:apply_cache(bufnr))
+	assert(vim.tbl_contains(client.settings.ltex.dictionary["en-GB"], "late"))
 end, debug.traceback)
 
 lsp.get_ltex, vim.notify, lsp.timeout_ms = original_get_ltex, original_notify, 10000
