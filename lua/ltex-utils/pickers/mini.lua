@@ -12,7 +12,8 @@ function M.open(ui, opts)
 	-- Custom key mappings
 	-- -----------------------------------------------------------------------
 
-	local mappings = {}
+	-- built-in action behind `source.choose` (the modify popup)
+	local mappings = { choose = opts.keys.modify }
 
 	mappings.ltex_delete = {
 		char = opts.keys.delete,
