@@ -35,17 +35,20 @@ local function configuration_handler(fallback)
 		if err or response_err or not state or type(result) ~= "table" then
 			return result, response_err
 		end
+		-- one pass over the documents, not one per requested item
+		local by_uri = {}
+		for bufnr in pairs(state.buffers) do
+			if vim.api.nvim_buf_is_valid(bufnr) then
+				by_uri[vim.uri_from_bufnr(bufnr)] = bufnr
+			end
+		end
 		local suspended = state.suspended
 		for i, item in ipairs(params.items or {}) do
-			if item.section == "ltex" and item.scopeUri then
-				for bufnr in pairs(state.buffers) do
-					if vim.api.nvim_buf_is_valid(bufnr)
-						and vim.uri_from_bufnr(bufnr) == item.scopeUri then
-						result[i] = M.merged(client, bufnr)
-						if suspended and suspended.doc == state.buffers[bufnr] then
-							result[i][suspended.key] = nil
-						end
-					end
+			local bufnr = item.section == "ltex" and item.scopeUri and by_uri[item.scopeUri]
+			if bufnr then
+				result[i] = M.merged(client, bufnr)
+				if suspended and suspended.doc == state.buffers[bufnr] then
+					result[i][suspended.key] = nil
 				end
 			end
 		end
