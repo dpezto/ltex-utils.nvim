@@ -209,10 +209,11 @@ end
 ---uppdates entry with diagnostics, otherwise inserts new entry.
 ---@param self LTeXUtils.cache
 ---@param diags table
+---@param col integer 1-based byte column of the diagnostic
 ---@param lang_rule string[]
 ---@param filename string
 ---@param bufnr integer
-local function process_rule(self, diags, lang_rule, filename, bufnr)
+local function process_rule(self, diags, col, lang_rule, filename, bufnr)
 	---@type string
 	local text = self.lang_rule_to_str(unpack(lang_rule))
 	---@type Telescope.entry
@@ -222,7 +223,7 @@ local function process_rule(self, diags, lang_rule, filename, bufnr)
 		-- only update server's rules
 		if curr_entry.type == severities[1] then
 			curr_entry.lnum = diags.range.start.line + 1
-			curr_entry.col = diags.range.start.character + 1
+			curr_entry.col = col
 			curr_entry.type = severities[3]
 		end
 	else
@@ -230,7 +231,7 @@ local function process_rule(self, diags, lang_rule, filename, bufnr)
 			bufnr = bufnr,
 			filename = filename,
 			lnum = diags.range.start.line + 1,
-			col = diags.range.start.character + 1,
+			col = col,
 			text = text,
 			type = severities[2],
 		}
@@ -270,15 +271,23 @@ local function actions_cb(self, bufnr, err, actions)
 		vim.notify("Error retrieving " .. self.setting_cfg .. " from actions")
 		return
 	end
+	local client = ltex_lsp.get_ltex(bufnr)
+	local encoding = client and client.offset_encoding or "utf-16"
 	for i, argument in ipairs(quickfix.command.arguments) do
 		---@type string
 		local filename = argument.uri and argument.uri:sub(8)
 				or vim.api.nvim_buf_get_name(bufnr)
+		local diag = quickfix.diagnostics[i]
+		-- LSP columns count `encoding` units; pickers and cursors want bytes
+		local start = diag.range.start
+		local line = vim.api.nvim_buf_get_lines(bufnr, start.line, start.line + 1, false)[1] or ""
+		local col = vim.str_byteindex(line, encoding, start.character, false) + 1
 		for lang, rules in pairs(argument[cfg_cmd_map[self.setting_cfg]]) do
 			for _, rule in ipairs(rules) do
 				process_rule(
 					self,
-					quickfix.diagnostics[i],
+					diag,
+					col,
 					{ lang, rule },
 					filename,
 					bufnr
