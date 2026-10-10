@@ -1,0 +1,22 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+title: ltex-utils.nvim
+abstract: A Neovim plugin for the code actions of the LTeX language server and for managing its settings and dictionaries.
+type: software
+authors:
+  - given-names: Dai
+    family-names: López Jacinto
+repository-code: "https://github.com/dpezto/ltex-utils.nvim"
+url: "https://github.com/dpezto/ltex-utils.nvim"
+license: MIT
+version: 1.0.0 # x-release-please-version
+date-released: "2026-10-10" # x-release-please-date
+references:
+  - type: software
+    title: ltex-utils.nvim
+    abstract: The plugin this one is forked from.
+    authors:
+      - given-names: Johannes
+        family-names: Hofscheier
+    repository-code: "https://github.com/jhofscheier/ltex-utils.nvim"
+    license: MIT
