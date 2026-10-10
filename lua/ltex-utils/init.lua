@@ -81,6 +81,8 @@ local function autocmd_ltex(bufnr)
 			if not client or client.name ~= Config.backend then return end
 			on_exit(args)
 			documents.forget(client, bufnr)
+			-- nothing left to save; a re-attach recreates the group
+			vim.api.nvim_del_augroup_by_id(augroup_id)
 		end,
 		group = augroup_id,
 		desc = "save ltex settings to files",

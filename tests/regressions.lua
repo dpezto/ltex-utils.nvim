@@ -120,7 +120,7 @@ local ok, err = xpcall(function()
 
 	-- a second command while collecting is refused instead of replacing the cache;
 	-- the edit popup reopens the picker already dirty (mini.pick blocks in open);
-	-- quitting with the picker open still saves its edits
+	-- quitting with the picker open still saves its edits; detaching drops the autocmds
 	local open_flags = {}
 	pickers.open = function(ui) table.insert(open_flags, ui.cache.update_flag) end
 	documents.forget(client, bufnr)
@@ -139,6 +139,8 @@ local ok, err = xpcall(function()
 	vim.api.nvim_exec_autocmds("VimLeavePre", {})
 	assert(vim.deep_equal(settings_io.read_settings(dir .. "/.new.md_ltex.json").disabledRules,
 		{ ["en-US"] = { "EDITED" } }))
+	vim.api.nvim_exec_autocmds("LspDetach", { buffer = bufnr, data = { client_id = client.id } })
+	assert(not pcall(vim.api.nvim_get_autocmds, { group = "LTeXUtils_" .. bufnr }))
 
 	-- settings saved under the old file name move to the new one on load
 	local legacy = vim.api.nvim_create_buf(true, false)
