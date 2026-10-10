@@ -196,7 +196,8 @@ Using the mentioned configuration above, activate code actions by pressing `<lea
 Navigate to an LTeX issue within your text (LaTeX, Markdown, etc.), then press `<leader>-ca` and choose a suitable option from the menu to fix the problem.
 
 Whenever the LTeX server detaches from a buffer (closing the buffer or stopping the server) or Neovim quits, its settings (including hidden false positives, disabled rules, used languages, and added dictionary words) are saved to disk.
-Settings are saved in the same folder as your LaTeX/Markdown file, named after the document with its extension folded in and a leading dot, so `paper.tex` yields `.paper_tex_ltex.json` (the dot keeps it out of ordinary directory listings).
+Settings are saved in the same folder as your LaTeX/Markdown file, named after the document with a leading dot, so `paper.tex` yields `.paper.tex_ltex.json` (the dot keeps it out of ordinary directory listings).
+Settings saved by earlier versions as `.paper_tex_ltex.json` are renamed to the new name the first time the document is opened.
 Hidden false positives and disabled rules are kept per document, including when several documents share one LTeX client; dictionaries stay shared.
 Dictionaries are merged with existing (stored) ones and then saved to preserve all words.
 Languages that use the same dictionary filename are combined into a single file write.
@@ -228,7 +229,7 @@ If you frequently use the 'Hide False Positive' code action, be mindful that cha
 Accumulating outdated rules can clutter the `hiddenFalsePositives` list, as LTeX doesn't clean them up automatically.
 
 To avoid this, use 'Hide False Positive' sparingly or manually remove obsolete rules through `:LTeXUtils modify_hiddenFalsePositives`.
-Direct modification of `.your_file_tex_ltex.json` settings file is not advised.
+Direct modification of `.your_file.tex_ltex.json` settings file is not advised.
 Using regular expressions for `hiddenFalsePositives` could help prevent clutter in your hidden false positives list.
 However, bear in mind that hidden false positive rules hide the entire sentence and might not yield the expected behaviour.
 An in-depth explanation is available in the [tutorial](TUTORIAL.md#hide-false-positives).

@@ -6,6 +6,12 @@ local ltex_lsp = require("ltex-utils.ltex_lsp")
 local settings_io = require("ltex-utils.settings_io")
 local table_utils = require("ltex-utils.table_utils")
 
+---Settings file of a document: `.<file name>_ltex.json` in its directory, or
+---nil for an unnamed buffer. The second value is the name used before, which
+---folded dots into underscores (so `a.b.tex` and `a_b.tex` collided); it is
+---renamed to the first on load, so settings saved under it carry over.
+---@param absolutePath string
+---@return string|nil, string|nil
 local function ltex_filename(absolutePath)
     -- Separate path and filename
     local path, name_with_possible_ext = absolutePath:match("^(.-)([^/]+)$")
@@ -13,11 +19,9 @@ local function ltex_filename(absolutePath)
 
     -- Split filename into name and its optional extension using your pattern
     local name, ext = name_with_possible_ext:match("^([^%.]*)(%.?.*)$")
+    local legacy = path .. "." .. name .. ext:gsub("%.", "_") .. "_ltex.json"
 
-    -- Construct the new filename
-    local newName = "." .. name .. ext:gsub("%.", "_") .. "_ltex.json"
-
-    return path .. newName
+    return path .. "." .. name_with_possible_ext .. "_ltex.json", legacy
 end
 
 ---Generates a code action handler updating LSP server settings with 'cmd_cfg'
@@ -129,13 +133,19 @@ function M.load_ltex_from_file(bufnr)
 		return false, "No active ltex client found"
 	end
 
-	---@type string|nil
-	local settings_filename = ltex_filename(vim.api.nvim_buf_get_name(bufnr))
+	---@type string|nil, string|nil
+	local settings_filename, legacy_filename =
+		ltex_filename(vim.api.nvim_buf_get_name(bufnr))
 
 	---@type table<string, string[]>|nil, string|nil
 	local saved_settings, err
 	if settings_filename then
 		saved_settings, err = settings_io.read_settings(settings_filename)
+		-- move settings saved under the previous file name to the current one
+		if not saved_settings and err:sub(1, 6) == "ENOENT"
+			and vim.uv.fs_rename(legacy_filename, settings_filename) then
+			saved_settings, err = settings_io.read_settings(settings_filename)
+		end
 	end
 	-- A new (or unnamed) document still needs the user's shared dictionaries.
 	local missing = not saved_settings

@@ -22,11 +22,11 @@ lsp.get_ltex = function() return client end
 vim.lsp.get_client_by_id = function() return client end
 vim.notify = function() end
 config.setup({ dictionary = { path = dir .. "/" } })
-local function sidecar(name) return io_utils.read_settings(dir .. "/." .. name .. "_md_ltex.json") end
+local function sidecar(name) return io_utils.read_settings(dir .. "/." .. name .. ".md_ltex.json") end
 
 local ok, err = xpcall(function()
 	-- the server gets each document's own rules
-	assert(io_utils.write(dir .. "/.a_md_ltex.json", vim.json.encode({ disabledRules = { ["en-US"] = { "A" } } })))
+	assert(io_utils.write(dir .. "/.a.md_ltex.json", vim.json.encode({ disabledRules = { ["en-US"] = { "A" } } })))
 	actions.load_ltex_from_file(a)
 	actions.load_ltex_from_file(b)
 	local function query(buf)

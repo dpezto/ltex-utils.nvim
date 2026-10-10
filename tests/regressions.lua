@@ -115,6 +115,19 @@ local ok, err = xpcall(function()
 	table.sort(applied)
 	assert(vim.deep_equal(applied, { "LATE", "NEW" }), vim.inspect(applied))
 
+	-- settings saved under the old file name move to the new one on load
+	local legacy = vim.api.nvim_create_buf(true, false)
+	vim.api.nvim_buf_set_name(legacy, dir .. "/old.v1.md")
+	assert(settings_io.write(dir .. "/.old_v1_md_ltex.json",
+		vim.json.encode({ disabledRules = { ["en-US"] = { "OLD" } } })))
+	assert(actions.load_ltex_from_file(legacy))
+	assert(not vim.uv.fs_stat(dir .. "/.old_v1_md_ltex.json"))
+	assert(settings_io.read_settings(dir .. "/.old.v1.md_ltex.json").disabledRules["en-US"][1] == "OLD")
+	assert(actions.write_ltex_to_file(legacy))
+	assert(settings_io.read_settings(dir .. "/.old.v1.md_ltex.json").disabledRules["en-US"][1] == "OLD")
+	documents.forget(client, legacy)
+	vim.api.nvim_buf_delete(legacy, { force = true })
+
 	-- an unnamed buffer loads dictionaries and saves without a settings file
 	local unnamed = vim.api.nvim_create_buf(true, false)
 	local loaded, load_err = actions.load_ltex_from_file(unnamed)
