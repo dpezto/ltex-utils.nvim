@@ -2,6 +2,13 @@
 -- Covers pure logic and mocked LSP/file persistence; no live server required.
 vim.opt.runtimepath:prepend(vim.fn.getcwd())
 
+-- COVERAGE=1: record line coverage with luacov (must start before the plugin
+-- modules load; jit.off() because compiled traces bypass the line hook)
+if os.getenv("COVERAGE") then
+	jit.off()
+	require("luacov")
+end
+
 local table_utils = require("ltex-utils.table_utils")
 local hfp_cache = require("ltex-utils.hfp_cache")
 local cache = require("ltex-utils.cache")
@@ -62,5 +69,10 @@ assert(select(1, c:delete_cb({ index = 99 })) == false)
 
 dofile("tests/regressions.lua")
 dofile("tests/isolation.lua")
+
+-- flush coverage stats before exit (`nvim -l` may skip luacov's exit hook)
+if os.getenv("COVERAGE") then
+	require("luacov.runner").shutdown()
+end
 
 print("ok")

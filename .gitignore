@@ -1,0 +1,3 @@
+# luacov artefacts (COVERAGE=1 make test)
+luacov.stats.out
+luacov.report.out
