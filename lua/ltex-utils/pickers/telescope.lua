@@ -19,32 +19,25 @@ local function make_simple_entries()
 	end
 end
 
----Removes deprecated entries from the current telescope picker.
+---Removes deprecated entries from the cache and rebuilds the picker from it.
+---Works on the cache, not on visible rows: those depend on the prompt filter,
+---the sorting strategy and any multi-selection.
 ---@param ui LTeXUtils.UI
 ---@param prompt_bufnr integer
-local function cleanup_rules(ui, prompt_bufnr)
+---@param new_finder fun(): table
+local function cleanup_rules(ui, prompt_bufnr, new_finder)
 	local action_state = require("telescope.actions.state")
-
-	local picker    = action_state.get_current_picker(prompt_bufnr)
 	local severities = vim.diagnostic.severity
-	local n          = table.maxn(ui.cache.data)
-	local row        = 0
 
-	for i = 1, n do
+	for i = 1, table.maxn(ui.cache.data) do
 		local entry = ui.cache.data[i]
-		if entry ~= nil then
-			if entry.type == severities[2] then
-				picker:set_selection(0)
-				break
-			elseif entry.type == severities[1] then
-				picker:set_selection(row)
-				picker:delete_selection(function(selection)
-					ui.cache:delete_cb(selection)
-				end)
-			end
-			row = row + 1
+		if entry ~= nil and entry.type == severities[1] then
+			ui.cache:delete_cb({ index = i })
 		end
 	end
+	-- the new finder numbers entries by list position, so close the holes
+	ui.cache:reset_indices()
+	action_state.get_current_picker(prompt_bufnr):refresh(new_finder(), { reset_prompt = false })
 end
 
 ---@param ui LTeXUtils.UI
@@ -59,15 +52,19 @@ function M.open(ui, opts)
 
 	local extra = opts.extra or {}
 
-	pickers.new(extra, {
-		prompt_title = opts.title,
-		default_text = "",
-		finder = finders.new_table {
+	local function new_finder()
+		return finders.new_table {
 			results     = ui.cache.data,
 			entry_maker = not opts.use_diags and make_simple_entries()
 				or extra.entry_maker
 				or make_entry.gen_from_diagnostics(extra),
-		},
+		}
+	end
+
+	pickers.new(extra, {
+		prompt_title = opts.title,
+		default_text = "",
+		finder = new_finder(),
 		previewer = opts.use_diags and conf.qflist_previewer(extra) or nil,
 		sorter    = conf.prefilter_sorter {
 			tag    = "type",
@@ -106,7 +103,7 @@ function M.open(ui, opts)
 			if opts.use_diags then
 				-- cleanup deprecated rules
 				map('n', opts.keys.cleanup, function(prompt_bufnr)
-					cleanup_rules(ui, prompt_bufnr)
+					cleanup_rules(ui, prompt_bufnr, new_finder)
 				end)
 
 				-- goto diagnostic location

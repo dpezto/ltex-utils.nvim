@@ -34,6 +34,8 @@ function M:apply_cache(bufnr)
 		dicts[lang] = {}
 	end
 
+	---@type table<string, true>
+	local kept = {}
 	-- we can't use `pairs(...)` because it doesn't guarantee the order
 	---@type integer
 	local n = table.maxn(self.data)
@@ -43,11 +45,44 @@ function M:apply_cache(bufnr)
 		if entry then
 			---@type string, string
 			local lang, word = self.selection_to_lang_rule(entry)
+			kept[entry.text] = true
 			-- an edited entry may name a language the server didn't report
 			dicts[lang] = dicts[lang] or {}
 			table.insert(dicts[lang], word)
 		end
 	end
+
+	-- keep words accepted (e.g. by a code action) after the picker opened
+	for lang, words in pairs(documents.shared(client).dictionary or {}) do
+		for _, word in ipairs(words) do
+			local text = self.lang_rule_to_str(lang, word)
+			if not self.initial[text] and not kept[text] then
+				kept[text] = true
+				dicts[lang] = dicts[lang] or {}
+				table.insert(dicts[lang], word)
+			end
+		end
+	end
+
+	-- languages sharing a file are one dictionary: a word removed under any of
+	-- them leaves all of them, or the other languages' copies would restore it
+	---@type table<string, table<string, true>>
+	local removed = {}
+	for text in pairs(self.initial) do
+		if not kept[text] then
+			local lang, word = self.selection_to_lang_rule({ text = text })
+			local filename = settings_io.dictionary_filename(lang, bufnr)
+			removed[filename] = removed[filename] or {}
+			removed[filename][word] = true
+		end
+	end
+	for lang, words in pairs(dicts) do
+		local gone = removed[settings_io.dictionary_filename(lang, bufnr)]
+		if gone then
+			dicts[lang] = vim.tbl_filter(function(word) return not gone[word] end, words)
+		end
+	end
+
 	local folder_ok, folder_err = pcall(vim.fn.mkdir, Config.dictionary.path, "p")
 	if not folder_ok then return false, folder_err end
 
@@ -74,6 +109,7 @@ function M:apply_cache(bufnr)
 
 	-- clean up cache for later reuse
 	self.data = nil
+	self.initial = nil
 	self.update_flag = false
 	self.setting_cfg = nil
 	self.langs = nil
@@ -145,6 +181,7 @@ function M:initialise_rules(telescope_cb, _)
 	self.data = {}; self:extract_rules(settings, bufnr)
 
 	add_saved_dicts(self, bufnr, settings)
+	self.initial = vim.tbl_map(function() return true end, self.data)
 
 	-- finalise list and show Telescope window
 	self:sorted_rules_list(); telescope_cb()

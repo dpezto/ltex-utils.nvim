@@ -6,17 +6,22 @@ local ltex_lsp = require("ltex-utils.ltex_lsp")
 local settings_io = require("ltex-utils.settings_io")
 local table_utils = require("ltex-utils.table_utils")
 
+---Settings file of a document: `.<file name>_ltex.json` in its directory, or
+---nil for an unnamed buffer. The second value is the name used before, which
+---folded dots into underscores (so `a.b.tex` and `a_b.tex` collided); it is
+---renamed to the first on load, so settings saved under it carry over.
+---@param absolutePath string
+---@return string|nil, string|nil
 local function ltex_filename(absolutePath)
     -- Separate path and filename
     local path, name_with_possible_ext = absolutePath:match("^(.-)([^/]+)$")
+    if not name_with_possible_ext then return nil end
 
     -- Split filename into name and its optional extension using your pattern
     local name, ext = name_with_possible_ext:match("^([^%.]*)(%.?.*)$")
+    local legacy = path .. "." .. name .. ext:gsub("%.", "_") .. "_ltex.json"
 
-    -- Construct the new filename
-    local newName = "." .. name .. ext:gsub("%.", "_") .. "_ltex.json"
-
-    return path .. newName
+    return path .. "." .. name_with_possible_ext .. "_ltex.json", legacy
 end
 
 ---Generates a code action handler updating LSP server settings with 'cmd_cfg'
@@ -62,8 +67,7 @@ function M.write_ltex_to_file(bufnr)
 
 	-- Use local variables to reduce table lookup cost
 	---@type table
-	local settings = ltex_lsp.settings_for_save(client, bufnr)
-	if not settings then return true end
+	local settings = documents.merged(client, bufnr)
 
 	---@type string[]
 	local langs
@@ -102,10 +106,12 @@ function M.write_ltex_to_file(bufnr)
 
 	settings_to_save.langs = langs
 
-	---@type string
-	local buf_filename = vim.api.nvim_buf_get_name(bufnr)
+	---@type string|nil
+	local settings_filename = ltex_filename(vim.api.nvim_buf_get_name(bufnr))
+	-- an unnamed buffer has nowhere to keep its rules (yet)
+	if not settings_filename then return true end
 	return settings_io.write(
-		ltex_filename(buf_filename),
+		settings_filename,
 		vim.json.encode(settings_to_save)
 	)
 end
@@ -127,15 +133,23 @@ function M.load_ltex_from_file(bufnr)
 		return false, "No active ltex client found"
 	end
 
-	---@type string
-	local settings_filename = vim.api.nvim_buf_get_name(bufnr)
+	---@type string|nil, string|nil
+	local settings_filename, legacy_filename =
+		ltex_filename(vim.api.nvim_buf_get_name(bufnr))
 
 	---@type table<string, string[]>|nil, string|nil
-	local saved_settings, err = settings_io.read_settings(
-		ltex_filename(settings_filename)
-	)
-	-- A new document still needs the user's shared dictionaries.
-	local missing = not saved_settings and err and err:sub(1, 6) == "ENOENT"
+	local saved_settings, err
+	if settings_filename then
+		saved_settings, err = settings_io.read_settings(settings_filename)
+		-- move settings saved under the previous file name to the current one
+		if not saved_settings and err:sub(1, 6) == "ENOENT"
+			and vim.uv.fs_rename(legacy_filename, settings_filename) then
+			saved_settings, err = settings_io.read_settings(settings_filename)
+		end
+	end
+	-- A new (or unnamed) document still needs the user's shared dictionaries.
+	local missing = not saved_settings
+		and (not settings_filename or err:sub(1, 6) == "ENOENT")
 	if not saved_settings and not missing then return false, err end
 
 	if saved_settings then

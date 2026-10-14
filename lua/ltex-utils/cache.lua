@@ -31,6 +31,8 @@ local cfg_cmd_map = {
 
 ---@class LTeXUtils.cache
 ---@field data Telescope.entry[]
+---@field initial table<string, true> Entry texts the settings held at initialisation
+---@field collecting boolean|nil Diagnostics collection still running
 ---@field setting_cfg string
 ---@field update_flag boolean
 local M = {}
@@ -161,12 +163,15 @@ function M:apply_cache(bufnr)
 
 	---@type table<string, string[]>
 	local res = {}
+	---@type table<string, true>
+	local kept = {}
 
 	for _, selection in pairs(self.data) do
 		-- skip diagnostics-only entries; they are not server rules
 		if selection.type ~= severities[2] then
 			---@type string, string
 			local lang, rule = self.selection_to_lang_rule(selection)
+			kept[selection.text] = true
 			if not res[lang] then
 				res[lang] = { rule }
 			else
@@ -174,12 +179,26 @@ function M:apply_cache(bufnr)
 			end
 		end
 	end
-	documents.get(client, bufnr)[self.setting_cfg] = res
+
+	-- keep rules added (e.g. by a code action) after the picker opened
+	local doc = documents.get(client, bufnr)
+	for lang, rules in pairs(doc[self.setting_cfg] or {}) do
+		for _, rule in ipairs(rules) do
+			local text = self.lang_rule_to_str(lang, rule)
+			if not self.initial[text] and not kept[text] then
+				kept[text] = true
+				res[lang] = res[lang] or {}
+				table.insert(res[lang], rule)
+			end
+		end
+	end
+	doc[self.setting_cfg] = res
 
 	-- send updated settings to LSP server
 	ltex_lsp.notify_settings(client)
 
 	self.data = nil
+	self.initial = nil
 	self.update_flag = false
 	self.setting_cfg = nil
 
@@ -190,10 +209,11 @@ end
 ---uppdates entry with diagnostics, otherwise inserts new entry.
 ---@param self LTeXUtils.cache
 ---@param diags table
+---@param col integer 1-based byte column of the diagnostic
 ---@param lang_rule string[]
 ---@param filename string
 ---@param bufnr integer
-local function process_rule(self, diags, lang_rule, filename, bufnr)
+local function process_rule(self, diags, col, lang_rule, filename, bufnr)
 	---@type string
 	local text = self.lang_rule_to_str(unpack(lang_rule))
 	---@type Telescope.entry
@@ -203,7 +223,7 @@ local function process_rule(self, diags, lang_rule, filename, bufnr)
 		-- only update server's rules
 		if curr_entry.type == severities[1] then
 			curr_entry.lnum = diags.range.start.line + 1
-			curr_entry.col = diags.range.start.character + 1
+			curr_entry.col = col
 			curr_entry.type = severities[3]
 		end
 	else
@@ -211,7 +231,7 @@ local function process_rule(self, diags, lang_rule, filename, bufnr)
 			bufnr = bufnr,
 			filename = filename,
 			lnum = diags.range.start.line + 1,
-			col = diags.range.start.character + 1,
+			col = col,
 			text = text,
 			type = severities[2],
 		}
@@ -251,15 +271,23 @@ local function actions_cb(self, bufnr, err, actions)
 		vim.notify("Error retrieving " .. self.setting_cfg .. " from actions")
 		return
 	end
+	local client = ltex_lsp.get_ltex(bufnr)
+	local encoding = client and client.offset_encoding or "utf-16"
 	for i, argument in ipairs(quickfix.command.arguments) do
 		---@type string
-		local filename = argument.uri and argument.uri:sub(8)
+		local filename = argument.uri and vim.uri_to_fname(argument.uri)
 				or vim.api.nvim_buf_get_name(bufnr)
+		local diag = quickfix.diagnostics[i]
+		-- LSP columns count `encoding` units; pickers and cursors want bytes
+		local start = diag.range.start
+		local line = vim.api.nvim_buf_get_lines(bufnr, start.line, start.line + 1, false)[1] or ""
+		local col = vim.str_byteindex(line, encoding, start.character, false) + 1
 		for lang, rules in pairs(argument[cfg_cmd_map[self.setting_cfg]]) do
 			for _, rule in ipairs(rules) do
 				process_rule(
 					self,
-					quickfix.diagnostics[i],
+					diag,
+					col,
 					{ lang, rule },
 					filename,
 					bufnr
@@ -314,6 +342,7 @@ function M:initialise_rules(telescope_cb, use_diags)
 
 	-- initialise rules table with server settings
 	self.data = {}; self:extract_rules(settings, bufnr)
+	self.initial = vim.tbl_map(function() return true end, self.data)
 
 	-- if no diags need to be included return table
 	if not use_diags then
@@ -345,12 +374,16 @@ function M:initialise_rules(telescope_cb, use_diags)
 
 	local restore, suspend_err = ltex_lsp.suspend_rules(client, setting_cfg, bufnr)
 	if not restore then return false, suspend_err end
+	self.collecting = true
 
 	---@type function()
 	local final_diags_cb = function(timed_out)
 		-- restore handler again
 		client.handlers["textDocument/publishDiagnostics"] = old_handler
 		restore()
+		-- a pending code action can't block new pickers; rule_ui drops
+		-- this one's picker if another cache replaced it meanwhile
+		self.collecting = nil
 		if timed_out then
 			ltex_lsp.notify_settings(client)
 			vim.notify("LTeXUtils: diagnostics collection failed or timed out; please retry",
@@ -374,6 +407,7 @@ function M:initialise_rules(telescope_cb, use_diags)
 	if not ok or not sent then
 		cancel()
 		restore()
+		self.collecting = nil
 		client.handlers["textDocument/publishDiagnostics"] = old_handler
 		return false, "Could not request diagnostics from LTeX"
 	end

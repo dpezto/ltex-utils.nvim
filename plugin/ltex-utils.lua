@@ -3,10 +3,9 @@ if vim.g.loaded_ltex_utils == 1 then
 end
 vim.g.loaded_ltex_utils = 1
 
-local builtin = require("ltex-utils.builtin")
-
+-- builtin is required on use: loading it pulls in most of the plugin
 vim.api.nvim_create_user_command("LTeXUtils", function(opts)
-	local fn = builtin[opts.args]
+	local fn = require("ltex-utils.builtin")[opts.args]
 	if type(fn) ~= "function" then
 		vim.notify(
 			"LTeXUtils: unknown command: " .. opts.args,
@@ -18,6 +17,7 @@ vim.api.nvim_create_user_command("LTeXUtils", function(opts)
 end, {
 	nargs = 1,
 	complete = function(arg_lead)
+		local builtin = require("ltex-utils.builtin")
 		local commands = vim.tbl_filter(function(key)
 			return type(builtin[key]) == "function"
 				and vim.startswith(key, arg_lead)

@@ -139,7 +139,7 @@ end
 ---@param bufnr? integer
 ---@return string
 function M.dictionary_filename(lang, bufnr)
-	return Config.dictionary.path .. Config.dictionary.filename(lang, bufnr)
+	return vim.fs.joinpath(Config.dictionary.path, Config.dictionary.filename(lang, bufnr))
 end
 
 ---Combine languages that share one file, retaining empty dictionaries for deletion.
@@ -163,8 +163,11 @@ function M.update_dictionary_files(dictionaries, bufnr)
 			return nil, read_err
 		end
 		dict = table_utils.merge_lists_unique(dict, saved_dict)
-		local ok, err = M.write(filename, table.concat(dict, "\n") .. "\n")
-		if not ok then return nil, err end
+		-- runs on every save: leave files whose words didn't change alone
+		if not vim.deep_equal(dict, saved_dict) then
+			local ok, err = M.write(filename, table.concat(dict, "\n") .. "\n")
+			if not ok then return nil, err end
+		end
 	end
 	return vim.tbl_keys(dictionaries)
 end

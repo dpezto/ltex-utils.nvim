@@ -12,7 +12,8 @@ function M.open(ui, opts)
 	-- Custom key mappings
 	-- -----------------------------------------------------------------------
 
-	local mappings = {}
+	-- built-in action behind `source.choose` (the modify popup)
+	local mappings = { choose = opts.keys.modify }
 
 	mappings.ltex_delete = {
 		char = opts.keys.delete,
@@ -59,11 +60,20 @@ function M.open(ui, opts)
 	if opts.use_diags then
 		preview_fn = function(buf_id, item)
 			if not item or not item.file then return end
-			local ok, lines = pcall(vim.fn.readfile, item.file)
+			-- diagnostics describe the buffer, unsaved edits included
+			local src = item._bufnr
+			local loaded = src and vim.api.nvim_buf_is_loaded(src)
+			local ok, lines
+			if loaded then
+				ok, lines = true, vim.api.nvim_buf_get_lines(src, 0, -1, false)
+			else
+				ok, lines = pcall(vim.fn.readfile, item.file)
+			end
 			if not ok or #lines == 0 then return end
 			vim.api.nvim_buf_set_lines(buf_id, 0, -1, false, lines)
-			local ft = vim.filetype.match({ filename = item.file })
-			if ft then vim.bo[buf_id].filetype = ft end
+			local ft = loaded and vim.bo[src].filetype
+				or vim.filetype.match({ filename = item.file })
+			if ft and ft ~= "" then vim.bo[buf_id].filetype = ft end
 			-- Scroll preview window to item location
 			if item.pos and item.pos[1] > 0 then
 				local state = MiniPick.get_picker_state()

@@ -1,17 +1,18 @@
 local M = {}
 
 -- Rules belong to one document. Everything else, dictionaries included (they
--- are one file per language anyway), stays shared in client.config.settings.
+-- are one file per language anyway), stays shared in client.settings (what
+-- Neovim answers the server with; client.config.settings may be nil).
 local PER_DOCUMENT = { "hiddenFalsePositives", "disabledRules" }
 
----@type table<table, { buffers: table<integer, table>, original: function|nil, handler: function }>
+---@type table<table, { buffers: table<integer, table>, original: function|nil, handler: function, suspended: table|nil }>
 local clients = setmetatable({}, { __mode = "k" })
 
 ---@param client table
 ---@return table
 function M.shared(client)
-	client.config.settings.ltex = client.config.settings.ltex or {}
-	return client.config.settings.ltex
+	client.settings.ltex = client.settings.ltex or {}
+	return client.settings.ltex
 end
 
 ---Shared settings with this document's rules on top, as sent to the server.
@@ -34,13 +35,20 @@ local function configuration_handler(fallback)
 		if err or response_err or not state or type(result) ~= "table" then
 			return result, response_err
 		end
+		-- one pass over the documents, not one per requested item
+		local by_uri = {}
+		for bufnr in pairs(state.buffers) do
+			if vim.api.nvim_buf_is_valid(bufnr) then
+				by_uri[vim.uri_from_bufnr(bufnr)] = bufnr
+			end
+		end
+		local suspended = state.suspended
 		for i, item in ipairs(params.items or {}) do
-			if item.section == "ltex" and item.scopeUri then
-				for bufnr in pairs(state.buffers) do
-					if vim.api.nvim_buf_is_valid(bufnr)
-						and vim.uri_from_bufnr(bufnr) == item.scopeUri then
-						result[i] = M.merged(client, bufnr)
-					end
+			local bufnr = item.section == "ltex" and item.scopeUri and by_uri[item.scopeUri]
+			if bufnr then
+				result[i] = M.merged(client, bufnr)
+				if suspended and suspended.doc == state.buffers[bufnr] then
+					result[i][suspended.key] = nil
 				end
 			end
 		end
@@ -81,6 +89,24 @@ end
 function M.owner(client, bufnr, key)
 	return vim.tbl_contains(PER_DOCUMENT, key) and M.get(client, bufnr)
 		or M.shared(client)
+end
+
+---Withhold this document's `key` rules from the server until `resume()` is
+---called. The document keeps them meanwhile, so code actions and saves made
+---during the suspension still land in (and persist from) the real rule table.
+---@param client table
+---@param bufnr? integer
+---@param key string
+---@return function|nil resume # nil if another suspension is in progress
+function M.suspend(client, bufnr, key)
+	local doc = M.get(client, bufnr)
+	local state = clients[client]
+	if state.suspended then return nil end
+	local pending = { doc = doc, key = key }
+	state.suspended = pending
+	return function()
+		if state.suspended == pending then state.suspended = nil end
+	end
 end
 
 ---Release a detached buffer, restoring the handler when the last one leaves.
