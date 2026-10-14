@@ -102,7 +102,7 @@ local ok, err = xpcall(function()
 	local wrong = { range = { start = { line = 0, character = 2 }, ["end"] = { line = 0, character = 7 } } }
 	function client:request(_, _, cb)
 		cb(nil, { { kind = "quickfix.ltex.disableRules", diagnostics = { wrong }, command = {
-			arguments = { { uri = "file://" .. dir .. "/a%20b.md", ruleIds = { ["en-US"] = { "R" } } } } } } })
+			arguments = { { uri = vim.uri_from_fname(dir .. "/a b.md"), ruleIds = { ["en-US"] = { "R" } } } } } } })
 		return true
 	end
 	client.handlers["textDocument/publishDiagnostics"](nil,
@@ -111,7 +111,8 @@ local ok, err = xpcall(function()
 	assert(vim.deep_equal(documents.get(client, bufnr).disabledRules["en-US"], { "KEEP", "NEW" }))
 	assert(vim.deep_equal(served().disabledRules["en-US"], { "KEEP", "NEW" }))
 	local proposed = find(rules.data, "en-US: R")
-	assert(proposed.col == 4 and proposed.filename == dir .. "/a b.md", vim.inspect(proposed))
+	assert(proposed.col == 4 and vim.fs.normalize(proposed.filename) == vim.fs.normalize(dir .. "/a b.md"),
+		vim.inspect(proposed))
 
 	-- applying the picker keeps rules added after it opened
 	assert(rules:delete_cb({ index = select(2, find(rules.data, "en-US: KEEP")) }))
