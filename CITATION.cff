@@ -10,7 +10,7 @@ repository-code: "https://github.com/dpezto/ltex-utils.nvim"
 url: "https://github.com/dpezto/ltex-utils.nvim"
 license: MIT
 version: 1.0.0 # x-release-please-version
-date-released: "2026-10-10" # x-release-please-date
+date-released: "2026-10-14" # x-release-please-date
 references:
   - type: software
     title: ltex-utils.nvim
