@@ -1,0 +1,23 @@
+coverage:
+  status:
+    # Nothing blocks a merge; the targets only pick the icon the status shows.
+    # auto compares project coverage against the base commit, with 1% slack so
+    # deleting well-covered code does not read as a regression.
+    project:
+      default:
+        informational: true
+        target: auto
+        threshold: 1%
+    patch:
+      default:
+        informational: true
+        target: 90%
+
+comment:
+  # Comment only when there is something to act on; stay silent on a PR whose
+  # patch is fully covered and moves nothing.
+  require_changes: "coverage_drop OR uncovered_patch"
+  layout: "condensed_header, diff, condensed_files, condensed_footer"
+
+ignore:
+  - "tests/**"

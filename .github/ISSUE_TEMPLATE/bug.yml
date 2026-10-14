@@ -1,0 +1,48 @@
+name: Bug report
+description: Something broke
+labels: [bug]
+body:
+  - type: input
+    id: nvim
+    attributes:
+      label: Neovim version
+      placeholder: "NVIM v0.11.2 (nvim --version)"
+    validations:
+      required: true
+  - type: input
+    id: server
+    attributes:
+      label: LTeX server and version
+      placeholder: "ltex-ls-plus 18.5.0 / ltex-ls 16.0.0"
+    validations:
+      required: true
+  - type: input
+    id: picker
+    attributes:
+      label: Picker backend
+      placeholder: "snacks.nvim / telescope.nvim / mini.pick"
+    validations:
+      required: true
+  - type: input
+    id: os
+    attributes:
+      label: OS
+      placeholder: "macOS 15 / Ubuntu 24.04 / Windows 11"
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Minimal reproduction
+      description: >
+        Smallest document and steps that trigger it, e.g. "open a .tex file with
+        one misspelled word, run the addToDictionary code action, then …".
+        Relevant non-default plugin config if any.
+    validations:
+      required: true
+  - type: textarea
+    id: behavior
+    attributes:
+      label: Expected vs actual behavior
+    validations:
+      required: true

@@ -1,0 +1,85 @@
+name: ci
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    # weekly run so nvim-nightly API drift surfaces without waiting for a push
+    - cron: "0 6 * * 1"
+permissions:
+  contents: read
+jobs:
+  actionlint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: reviewdog/action-actionlint@1758727be30241166609dad4c97588b6ad411f32 # v1
+  test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        neovim: [stable, nightly]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: rhysd/action-setup-vim@febef33995d6649302e9d88dda81e071b68f16a7 # v1
+        with:
+          neovim: true
+          version: ${{ matrix.neovim }}
+      # Run nvim directly (no GNU Make dependency, which Windows runners lack);
+      # equivalent to `make test`. The ubuntu+stable leg instead runs under luacov.
+      - if: ${{ !(matrix.os == 'ubuntu-latest' && matrix.neovim == 'stable') }}
+        name: test
+        run: nvim --headless --clean -l tests/run.lua
+      # stable leg runs the same tests under luacov (Neovim is LuaJIT = Lua 5.1)
+      - if: matrix.os == 'ubuntu-latest' && matrix.neovim == 'stable'
+        name: test with coverage
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -yq luarocks lua5.1 liblua5.1-0-dev
+          luarocks --lua-version 5.1 --tree "$HOME/.luarocks" install luacov
+          luarocks --lua-version 5.1 --tree "$HOME/.luarocks" install luacov-reporter-lcov
+          export LUA_PATH="$HOME/.luarocks/share/lua/5.1/?.lua;$HOME/.luarocks/share/lua/5.1/?/init.lua;;"
+          COVERAGE=1 make test
+          "$HOME/.luarocks/bin/luacov" -r lcov
+          sed -i "s|^SF:$GITHUB_WORKSPACE/|SF:|" luacov.report.out
+      - if: matrix.os == 'ubuntu-latest' && matrix.neovim == 'stable'
+        uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7
+        with:
+          # Tokenless uploads are accepted for pull requests but rejected on
+          # pushes ("Token required - not valid tokenless upload"), so main's
+          # coverage only moves with the secret set. Absent secret degrades to
+          # tokenless rather than failing.
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: luacov.report.out
+          disable_search: true
+          fail_ci_if_error: false
+  release:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      # Mint a GitHub App token so the release PR is opened by the App rather
+      # than GITHUB_TOKEN. A PR created by GITHUB_TOKEN cannot trigger CI, so it
+      # would arrive with no status checks and could not satisfy branch
+      # protection without an admin merge.
+      - uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3
+        id: app-token
+        # Tolerate missing App secrets: the step below falls back to
+        # GITHUB_TOKEN, and the release still works; the release PR just needs
+        # an admin merge because it has no checks.
+        continue-on-error: true
+        with:
+          app-id: ${{ secrets.RELEASE_PLEASE_APP_ID }}
+          private-key: ${{ secrets.RELEASE_PLEASE_APP_KEY }}
+      # Config lives in release-please-config.json and
+      # .release-please-manifest.json, which the action picks up by name. The
+      # release-type input is not passed alongside them: it selects the older
+      # non-manifest mode, and extra-files (CITATION.cff) needs the manifest.
+      - uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5
+        with:
+          token: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
